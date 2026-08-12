@@ -1,0 +1,6 @@
+{
+  "name": "FRU Employee Management System",
+  "description": "An employee management and HRMS portal built using Google Sheets as a database.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+body {
+  background-color: #F7F7F7;
+  color: #73879C;
+  font-family: "Helvetica Neue", Roboto, Arial, "Droid Sans", sans-serif;
+}
+
+input, select, textarea {
+  color: #73879C;
+}
+
+/* Custom scrollbar for sidebar to match Gentelella */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
