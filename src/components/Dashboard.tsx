@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, PieChart, Pie, Cell } from 'recharts';
-import { Calendar as CalendarIcon, CheckCircle, Loader2, Download } from 'lucide-react';
+import { Calendar as CalendarIcon, CheckCircle, Loader2, Download, Gift } from 'lucide-react';
 import { getRange } from '../lib/sheets';
-import { startOfMonth, endOfMonth, eachDayOfInterval, format, parseISO, isWithinInterval } from 'date-fns';
+import { startOfMonth, endOfMonth, eachDayOfInterval, format, parseISO, isWithinInterval, isWeekend, isBefore, isToday } from 'date-fns';
+import bannerImg from '../assets/images/3d_dashboard_banner_1786861208382.jpg';
 
 export default function Dashboard({ spreadsheetId, user, accessLevels }: { spreadsheetId: string, user?: any, accessLevels?: string[] }) {
   const [brandCapacity, setBrandCapacity] = useState<{ name: string, value: number }[]>([]);
@@ -15,6 +16,7 @@ export default function Dashboard({ spreadsheetId, user, accessLevels }: { sprea
   });
   const [leavesPerDay, setLeavesPerDay] = useState<Record<string, number>>({});
   const [pendingTasks, setPendingTasks] = useState<string[][]>([]);
+  const [birthdays, setBirthdays] = useState<string[][]>([]);
   const [supervisors, setSupervisors] = useState<string[][]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -22,6 +24,11 @@ export default function Dashboard({ spreadsheetId, user, accessLevels }: { sprea
   const currentMonthStart = startOfMonth(today);
   const currentMonthEnd = endOfMonth(today);
   const daysInMonth = eachDayOfInterval({ start: currentMonthStart, end: currentMonthEnd });
+
+  const totalWorkingDays = daysInMonth.filter(day => !isWeekend(day)).length;
+  const daysPassed = daysInMonth.filter(day => isBefore(day, today) || isToday(day));
+  const workingDaysPassed = daysPassed.filter(day => !isWeekend(day)).length;
+  const remainingWorkingDays = totalWorkingDays - workingDaysPassed;
 
   useEffect(() => {
     async function loadData() {
@@ -94,8 +101,22 @@ export default function Dashboard({ spreadsheetId, user, accessLevels }: { sprea
         deptData.sort((a, b) => b.value - a.value);
         setDepartmentCapacity(deptData);
         
+        const activeEmployees = employees.filter(e => e[9] !== 'Inactive');
+
+        const currentMonthBirthdays = activeEmployees.filter(e => {
+          if (!e[21]) return false;
+          try {
+            const dob = new Date(e[21]);
+            return dob.getMonth() === today.getMonth();
+          } catch(err) {
+            return false;
+          }
+        });
+        currentMonthBirthdays.sort((a, b) => new Date(a[21]).getDate() - new Date(b[21]).getDate());
+        setBirthdays(currentMonthBirthdays);
+
         setStats({
-          totalEmployee: employees.length,
+          totalEmployee: activeEmployees.length,
           numberOfMachine,
           dailyCapacity: totalDailyCapacity,
           monthlyCapacity: totalDailyCapacity * 22
@@ -137,29 +158,36 @@ export default function Dashboard({ spreadsheetId, user, accessLevels }: { sprea
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
+      {/* 3D Banner */}
+      <div className="w-full h-[200px] md:h-[260px] rounded-2xl overflow-hidden relative shadow-[0_10px_20px_rgba(0,0,0,0.1)] border border-white">
+        <img src={bannerImg} alt="Workspace Banner" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-8">
+           <div>
+             <h1 className="text-3xl font-black text-white tracking-tight drop-shadow-md">FRU Overview</h1>
+             <p className="text-white/80 font-medium mt-1">Real-time metrics and capacity</p>
+           </div>
+        </div>
+      </div>
+
       {/* Top Row */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        {/* SUPERVISORS */}
-        <div className="md:col-span-3 bg-[#F4C75D] rounded-xl p-6 text-white relative flex flex-col">
-          <h3 className="uppercase text-sm tracking-wider font-semibold mb-6">Supervisors</h3>
-          <div className="space-y-3 relative z-10 flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent">
-            {supervisors.length === 0 ? (
-              <div className="text-white/80 text-sm italic">No supervisors found</div>
-            ) : (
-              supervisors.map((s, i) => (
-                <div key={i} className="flex items-center bg-white/20 rounded text-white overflow-hidden p-3">
-                  <div className="flex-1 flex flex-col">
-                    <span className="font-bold text-sm">{s[0]}</span>
-                    <span className="text-xs opacity-90 truncate text-[#33495F]">Line Manager / Supervisor</span>
-                  </div>
-                </div>
-              ))
-            )}
+        {/* WORKING DAYS INFO */}
+        <div className="md:col-span-3 bg-[#F4C75D] rounded-xl p-6 text-white relative flex flex-col justify-center items-center text-center shadow-[0_6px_0_0_#D4A73D] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#D4A73D]">
+          <h3 className="uppercase text-sm tracking-widest font-bold mb-6 text-white/90">This Month ({format(today, 'MMMM')})</h3>
+          <div className="space-y-4 w-full">
+            <div className="bg-white/20 rounded-xl p-4 backdrop-blur-sm shadow-sm border border-white/10">
+              <div className="text-white/90 text-[11px] uppercase tracking-widest font-bold mb-1">Working Days</div>
+              <div className="text-5xl font-black tracking-tighter">{workingDaysPassed} <span className="text-2xl font-semibold opacity-75">/ {totalWorkingDays}</span></div>
+            </div>
+            <div className="bg-white/20 rounded-xl p-4 backdrop-blur-sm shadow-sm border border-white/10">
+              <div className="text-white/90 text-[11px] uppercase tracking-widest font-bold mb-1">Remaining Days</div>
+              <div className="text-4xl font-black tracking-tighter">{remainingWorkingDays}</div>
+            </div>
           </div>
         </div>
 
         {/* STATISTICS */}
-        <div className="md:col-span-6 bg-white rounded-xl p-6 border border-gray-100 shadow-sm flex flex-col">
+        <div className="md:col-span-6 bg-white rounded-xl p-6 border border-gray-100 flex flex-col shadow-[0_6px_0_0_#e5e7eb] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#e5e7eb]">
           <div className="flex justify-between items-center mb-4">
             <h3 className="uppercase text-sm tracking-wider font-semibold text-gray-500">Statistics (Brand Capacity)</h3>
             <div className="flex items-center text-sm text-[#F87C6C] font-medium">
@@ -196,7 +224,7 @@ export default function Dashboard({ spreadsheetId, user, accessLevels }: { sprea
         </div>
 
         {/* DEPARTMENT CAPACITY */}
-        <div className="md:col-span-3 bg-[#1ECA98] rounded-xl p-6 text-white flex flex-col">
+        <div className="md:col-span-3 bg-[#1ECA98] rounded-xl p-6 text-white flex flex-col shadow-[0_6px_0_0_#0EAA78] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#0EAA78]">
           <h3 className="uppercase text-sm tracking-wider font-semibold mb-2">Department Capacity</h3>
           <div className="flex-1 flex items-center justify-center relative">
             {isLoading ? (
@@ -239,21 +267,21 @@ export default function Dashboard({ spreadsheetId, user, accessLevels }: { sprea
 
       {/* Middle Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-[#F87C6C] rounded-xl p-6 text-white text-center flex flex-col justify-center">
+        <div className="bg-[#F87C6C] rounded-xl p-6 text-white text-center flex flex-col justify-center shadow-[0_6px_0_0_#D85C4C] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#D85C4C] cursor-default">
           <h3 className="uppercase text-xs tracking-wider font-semibold mb-1">Total Employee</h3>
           <p className="text-4xl font-bold">{stats.totalEmployee.toLocaleString()}</p>
         </div>
-        <div className="bg-[#1ECA98] rounded-xl p-6 text-white text-center flex flex-col justify-center relative overflow-hidden">
+        <div className="bg-[#1ECA98] rounded-xl p-6 text-white text-center flex flex-col justify-center relative overflow-hidden shadow-[0_6px_0_0_#0EAA78] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#0EAA78] cursor-default">
           <h3 className="uppercase text-xs tracking-wider font-semibold mb-1">Number of machine</h3>
           <div className="flex items-end justify-center space-x-2">
             <p className="text-4xl font-bold">{stats.numberOfMachine.toLocaleString()}</p>
           </div>
         </div>
-        <div className="bg-[#F4C75D] rounded-xl p-6 text-white text-center flex flex-col justify-center">
+        <div className="bg-[#F4C75D] rounded-xl p-6 text-white text-center flex flex-col justify-center shadow-[0_6px_0_0_#D4A73D] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#D4A73D] cursor-default">
           <h3 className="uppercase text-xs tracking-wider font-semibold mb-1">Daily capacity</h3>
           <p className="text-4xl font-bold">{stats.dailyCapacity.toLocaleString()}</p>
         </div>
-        <div className="bg-[#1ECA98] rounded-xl p-6 text-white text-center flex flex-col justify-center">
+        <div className="bg-[#1ECA98] rounded-xl p-6 text-white text-center flex flex-col justify-center shadow-[0_6px_0_0_#0EAA78] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#0EAA78] cursor-default">
           <h3 className="uppercase text-xs tracking-wider font-semibold mb-1">Monthly capacity</h3>
           <div className="flex items-end justify-center space-x-2">
             <p className="text-4xl font-bold">{stats.monthlyCapacity.toLocaleString()}</p>
@@ -264,7 +292,7 @@ export default function Dashboard({ spreadsheetId, user, accessLevels }: { sprea
       {/* Bottom Row */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* DAILY TASKS */}
-        <div className="md:col-span-7 bg-[#F4C75D] rounded-xl p-6">
+        <div className="md:col-span-7 bg-[#F4C75D] rounded-xl p-6 shadow-[0_6px_0_0_#D4A73D] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#D4A73D]">
           <h3 className="uppercase text-sm tracking-wider font-semibold text-white mb-6">Daily Tasks</h3>
           <div className="max-h-[220px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent">
             {pendingTasks.length === 0 ? (
@@ -289,7 +317,7 @@ export default function Dashboard({ spreadsheetId, user, accessLevels }: { sprea
         </div>
 
         {/* CALENDAR */}
-        <div className="md:col-span-5 bg-white rounded-xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row gap-6">
+        <div className="md:col-span-5 bg-white rounded-xl p-6 border border-gray-100 flex flex-col md:flex-row gap-6 shadow-[0_6px_0_0_#e5e7eb] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#e5e7eb]">
           <div className="flex-1">
             <h3 className="uppercase text-sm tracking-wider font-semibold text-gray-500 mb-4">Calendar - {format(today, 'MMMM')}</h3>
             <div className="grid grid-cols-7 gap-1">
@@ -332,6 +360,55 @@ export default function Dashboard({ spreadsheetId, user, accessLevels }: { sprea
               <p>Red dates indicate employees are on leave.</p>
               <p>Total leaves this month: {Object.values(leavesPerDay).reduce((a: any, b: any) => a + b, 0)}</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+        <div className="bg-[#9B59B6] rounded-xl p-6 text-white flex flex-col shadow-[0_6px_0_0_#7B3996] transform transition-transform hover:-translate-y-1 hover:shadow-[0_10px_0_0_#7B3996]">
+          <h3 className="uppercase text-sm tracking-wider font-semibold mb-6 flex items-center gap-2">
+            <Gift className="w-4 h-4" /> Upcoming Birthdays ({format(today, 'MMMM')})
+          </h3>
+          <div className="flex-1 overflow-y-auto pr-2 max-h-[300px]">
+            {birthdays.length === 0 ? (
+              <div className="text-white/80 text-sm italic">No active employee birthdays this month.</div>
+            ) : (
+              <ul className="space-y-4">
+                {birthdays.map((emp, i) => {
+                  let dobDate: Date | null = null;
+                  try {
+                    dobDate = new Date(emp[21]);
+                  } catch (e) {}
+
+                  return (
+                    <li key={i} className="flex items-center justify-between border-b border-white/20 pb-3 last:border-0">
+                      <div className="flex items-center gap-3">
+                        {emp[16] ? (
+                          <img src={emp[16]} alt={emp[1]} className="w-10 h-10 rounded-full object-cover border-2 border-white/30" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg">
+                            {emp[1]?.charAt(0) || 'U'}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-semibold text-sm">{emp[1]}</div>
+                          <div className="text-white/70 text-xs truncate max-w-[150px]">{emp[2]}</div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {dobDate && (
+                          <>
+                            <div className="font-bold text-lg">{format(dobDate, 'd')}</div>
+                            <div className="text-white/70 text-xs uppercase tracking-wider">{format(dobDate, 'MMM')}</div>
+                          </>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
       </div>

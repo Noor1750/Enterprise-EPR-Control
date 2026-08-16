@@ -14,6 +14,7 @@ export default function MachineCapacity({ spreadsheetId, view = 'both' }: { spre
   
   const [editingMachineIndex, setEditingMachineIndex] = useState<number | null>(null);
   const [editingSkillIndex, setEditingSkillIndex] = useState<number | null>(null);
+  const [skillSearch, setSkillSearch] = useState('');
 
   const loadData = async () => {
     setIsLoading(true);
@@ -193,10 +194,17 @@ export default function MachineCapacity({ spreadsheetId, view = 'both' }: { spre
           <form onSubmit={handleAddSkill} className="flex flex-col md:flex-row items-end gap-4">
             <div className="flex-1 w-full">
               <label className="block text-sm font-medium text-[#73879C] mb-1">Employee</label>
-              <select required value={sForm.id} onChange={e => setSForm({...sForm, id: e.target.value})} className="w-full px-3 py-2 border rounded-sm">
-                <option value="">Select Employee</option>
+              <input 
+                required 
+                list="employee-list" 
+                placeholder="Search by ID or Name..." 
+                value={sForm.id} 
+                onChange={e => setSForm({...sForm, id: e.target.value})} 
+                className="w-full px-3 py-2 border rounded-sm" 
+              />
+              <datalist id="employee-list">
                 {employees.map(e => <option key={e[0]} value={e[0]}>{e[0]} - {e[1]}</option>)}
-              </select>
+              </datalist>
             </div>
             <div className="flex-1 w-full">
               <label className="block text-sm font-medium text-[#73879C] mb-1">Machine</label>
@@ -225,6 +233,17 @@ export default function MachineCapacity({ spreadsheetId, view = 'both' }: { spre
             </div>
           </form>
         </div>
+        
+        <div className="bg-white border border-[#E6E9ED] p-4 mb-4 rounded-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <input 
+            type="text"
+            placeholder="Search mapped skills by ID..."
+            value={skillSearch}
+            onChange={(e) => setSkillSearch(e.target.value)}
+            className="w-full md:w-1/3 px-4 py-2 border rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
         <div className="bg-white border border-[#E6E9ED] p-4 mb-4 rounded-sm overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-[#F9F9F9]">
@@ -236,7 +255,7 @@ export default function MachineCapacity({ spreadsheetId, view = 'both' }: { spre
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {skills.map((s, i) => (
+              {skills.filter(s => (s[0] || '').toLowerCase().includes(skillSearch.toLowerCase())).map((s, i) => (
                 <tr key={i} className={editingSkillIndex === i ? 'bg-blue-50' : ''}>
                   <td className="px-4 py-2 text-sm">{s[0]}</td>
                   <td className="px-4 py-2 text-sm">{s[1]}</td>

@@ -25,7 +25,8 @@ export default function EmployeeDirectory({ spreadsheetId }: EmployeeDirectoryPr
     id: '', name: '', designation: '', department: '', dateOfJoin: '',
     position: '', supervisor: '', salary: '', overtimeRate: '',
     status: 'Active', inactiveDate: '', phone: '', emergency: '', shift: 'General', bloodGroup: '',
-    workingArea: '', profilePicture: '', manager: ''
+    workingArea: '', profilePicture: '', manager: '',
+    tShirtSize: '', shoeSize: '', volunteer: 'No', dateOfBirth: ''
   });
 
   const loadData = async () => {
@@ -59,14 +60,15 @@ export default function EmployeeDirectory({ spreadsheetId }: EmployeeDirectoryPr
       formData.id, formData.name, formData.designation, formData.department,
       formData.dateOfJoin, formData.position, formData.supervisor, formData.salary,
       formData.overtimeRate, formData.status, formData.inactiveDate, formData.phone,
-      formData.emergency, formData.shift, formData.bloodGroup, formData.workingArea, formData.profilePicture, formData.manager
+      formData.emergency, formData.shift, formData.bloodGroup, formData.workingArea, formData.profilePicture, formData.manager,
+      formData.tShirtSize, formData.shoeSize, formData.volunteer, formData.dateOfBirth
     ];
 
     try {
       if (isEditing) {
         await updateRowByPrimaryKey(spreadsheetId, 'Employees', formData.id, values);
       } else {
-        await appendRow(spreadsheetId, 'Employees!A:R', [values]);
+        await appendRow(spreadsheetId, 'Employees!A:V', [values]);
       }
       setShowModal(false);
       loadData();
@@ -94,16 +96,16 @@ export default function EmployeeDirectory({ spreadsheetId }: EmployeeDirectoryPr
         // Skip header row
         const rows = data.slice(1).filter(row => row.length > 0 && row[0]);
         
-        // Pad rows to 18 columns if needed
+        // Pad rows to 21 columns if needed
         const paddedRows = rows.map(row => {
           const padded = [...row];
-          while (padded.length < 18) padded.push('');
+          while (padded.length < 21) padded.push('');
           return padded.map(val => val ? String(val) : '');
         });
 
         if (paddedRows.length > 0) {
           // Add in chunks or all at once
-          await appendRow(spreadsheetId, 'Employees!A:R', paddedRows);
+          await appendRow(spreadsheetId, 'Employees!A:U', paddedRows);
           alert(`Successfully uploaded ${paddedRows.length} employees.`);
           loadData();
         }
@@ -124,7 +126,8 @@ export default function EmployeeDirectory({ spreadsheetId }: EmployeeDirectoryPr
       dateOfJoin: row[4] || '', position: row[5] || '', supervisor: row[6] || '', salary: row[7] || '',
       overtimeRate: row[8] || '', status: row[9] || 'Active', inactiveDate: row[10] || '',
       phone: row[11] || '', emergency: row[12] || '', shift: row[13] || 'General', bloodGroup: row[14] || '',
-      workingArea: row[15] || '', profilePicture: row[16] || '', manager: row[17] || ''
+      workingArea: row[15] || '', profilePicture: row[16] || '', manager: row[17] || '',
+      tShirtSize: row[18] || '', shoeSize: row[19] || '', volunteer: row[20] || 'No', dateOfBirth: row[21] || ''
     });
     setIsEditing(true);
     setShowModal(true);
@@ -165,7 +168,7 @@ export default function EmployeeDirectory({ spreadsheetId }: EmployeeDirectoryPr
           </button>
           <button 
             onClick={() => {
-              setFormData({id: '', name: '', designation: '', department: '', dateOfJoin: '', position: '', supervisor: '', salary: '', overtimeRate: '', status: 'Active', inactiveDate: '', phone: '', emergency: '', shift: 'General', bloodGroup: '', workingArea: '', profilePicture: '', manager: ''});
+              setFormData({id: '', name: '', designation: '', department: '', dateOfJoin: '', position: '', supervisor: '', salary: '', overtimeRate: '', status: 'Active', inactiveDate: '', phone: '', emergency: '', shift: 'General', bloodGroup: '', workingArea: '', profilePicture: '', manager: '', tShirtSize: '', shoeSize: '', volunteer: 'No', dateOfBirth: ''});
               setIsEditing(false);
               setShowModal(true);
             }}
@@ -300,6 +303,16 @@ export default function EmployeeDirectory({ spreadsheetId }: EmployeeDirectoryPr
                         <span className="text-gray-400">Blood Group</span>
                         <span className="font-medium text-[#73879C]">{row[14] || '-'}</span>
                       </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Sizes</span>
+                        <span className="font-medium text-[#73879C]">
+                          {row[18] ? `T: ${row[18]}` : ''} {row[19] ? `| S: ${row[19].split('/')[0].trim()}` : ''}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Volunteer</span>
+                        <span className={`font-medium text-right ${row[20] && row[20] !== 'No' && row[20] !== 'No / None' ? 'text-green-600' : 'text-[#73879C]'}`}>{row[20] || 'No'}</span>
+                      </div>
                     </div>
                   </div>
                   <div className="bg-[#F9F9F9] px-6 py-3 border-t border-[#E6E9ED] flex justify-end space-x-3">
@@ -371,6 +384,10 @@ export default function EmployeeDirectory({ spreadsheetId }: EmployeeDirectoryPr
                 <input type="date" value={formData.dateOfJoin} onChange={e => setFormData({...formData, dateOfJoin: e.target.value})} className="w-full px-3 py-2 border rounded-sm" />
               </div>
               <div>
+                <label className="block text-sm font-medium text-[#73879C] mb-1">Birthday</label>
+                <input type="date" value={formData.dateOfBirth} onChange={e => setFormData({...formData, dateOfBirth: e.target.value})} className="w-full px-3 py-2 border rounded-sm" />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-[#73879C] mb-1">Shift</label>
                 <select value={formData.shift} onChange={e => setFormData({...formData, shift: e.target.value})} className="w-full px-3 py-2 border rounded-sm">
                   <option value="A">Shift A</option>
@@ -385,6 +402,12 @@ export default function EmployeeDirectory({ spreadsheetId }: EmployeeDirectoryPr
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
+              {formData.status === 'Inactive' && (
+                <div>
+                  <label className="block text-sm font-medium text-[#73879C] mb-1">Inactive Date</label>
+                  <input type="date" value={formData.inactiveDate} onChange={e => setFormData({...formData, inactiveDate: e.target.value})} className="w-full px-3 py-2 border rounded-sm" />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-[#73879C] mb-1">Salary</label>
                 <input type="number" value={formData.salary} onChange={e => setFormData({...formData, salary: e.target.value})} className="w-full px-3 py-2 border rounded-sm" />
@@ -413,6 +436,49 @@ export default function EmployeeDirectory({ spreadsheetId }: EmployeeDirectoryPr
                   <option value="O-">O-</option>
                   <option value="AB+">AB+</option>
                   <option value="AB-">AB-</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#73879C] mb-1">T-Shirt Size</label>
+                <select value={formData.tShirtSize} onChange={e => setFormData({...formData, tShirtSize: e.target.value})} className="w-full px-3 py-2 border rounded-sm">
+                  <option value="">Select...</option>
+                  <option value="XS">XS</option>
+                  <option value="S">S</option>
+                  <option value="M">M</option>
+                  <option value="L">L</option>
+                  <option value="XL">XL</option>
+                  <option value="XXL">XXL</option>
+                  <option value="XXXL">XXXL</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#73879C] mb-1">Shoe Size</label>
+                <select value={formData.shoeSize} onChange={e => setFormData({...formData, shoeSize: e.target.value})} className="w-full px-3 py-2 border rounded-sm">
+                  <option value="">Select...</option>
+                  <option value="UK 5 / EU 39">UK 5 / EU 39</option>
+                  <option value="UK 6 / EU 40">UK 6 / EU 40</option>
+                  <option value="UK 7 / EU 41">UK 7 / EU 41</option>
+                  <option value="UK 8 / EU 42">UK 8 / EU 42</option>
+                  <option value="UK 9 / EU 43">UK 9 / EU 43</option>
+                  <option value="UK 10 / EU 44">UK 10 / EU 44</option>
+                  <option value="UK 11 / EU 45">UK 11 / EU 45</option>
+                  <option value="UK 12 / EU 46">UK 12 / EU 46</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#73879C] mb-1">Volunteer</label>
+                <select value={formData.volunteer} onChange={e => setFormData({...formData, volunteer: e.target.value})} className="w-full px-3 py-2 border rounded-sm">
+                  <option value="No">No / None</option>
+                  <option value="Fire Fighter">Fire Fighter</option>
+                  <option value="Fire Rescue">Fire Rescue</option>
+                  <option value="Safety">Safety</option>
+                  <option value="First Aid">First Aid</option>
+                  <option value="Fire First Aid">Fire First Aid</option>
+                  <option value="CSR">CSR</option>
+                  <option value="Sports">Sports</option>
+                  <option value="Employee Engagement">Employee Engagement</option>
+                  <option value="5S">5S</option>
+                  <option value="Sustainability">Sustainability</option>
                 </select>
               </div>
               

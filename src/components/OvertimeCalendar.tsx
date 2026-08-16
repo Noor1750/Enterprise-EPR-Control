@@ -50,6 +50,7 @@ export default function OvertimeCalendar({ spreadsheetId, user }: { spreadsheetI
         await deleteRowByPrimaryKey(spreadsheetId, 'Overtime', existingOT[0]);
         
         setForm({ ...form, hours: '' });
+        setSelectedEmp('');
         setShowModal(false);
         loadData();
       } catch (err) {
@@ -78,6 +79,7 @@ export default function OvertimeCalendar({ spreadsheetId, user }: { spreadsheetI
       try {
         await updateRowByPrimaryKey(spreadsheetId, 'Overtime', existingOT[0], newValues);
         setForm({ ...form, hours: '' });
+        setSelectedEmp('');
         setShowModal(false);
         loadData();
       } catch (err) { alert('Failed to update'); }
@@ -90,6 +92,7 @@ export default function OvertimeCalendar({ spreadsheetId, user }: { spreadsheetI
     try {
       await appendRow(spreadsheetId, 'Overtime!A:G', [values]);
       setForm({ ...form, hours: '' });
+      setSelectedEmp('');
       setShowModal(false);
       loadData();
     } catch (err) { alert('Failed'); }
@@ -142,7 +145,11 @@ export default function OvertimeCalendar({ spreadsheetId, user }: { spreadsheetI
           </div>
         </div>
         <button 
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            setSelectedEmp('');
+            setForm({ date: format(currentDate, 'yyyy-MM-dd'), hours: '' });
+            setShowModal(true);
+          }}
           className="bg-[#337AB7] text-white px-4 py-2 rounded-sm hover:bg-[#286090] flex items-center"
         >
           <Plus className="w-4 h-4 mr-2" /> Log Overtime

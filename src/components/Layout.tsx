@@ -44,7 +44,7 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels }: 
     { id: 'practices', name: 'Best Practices', icon: Award, moduleName: 'Best Practices' },
     { id: 'orgchart', name: 'Organization Chart', icon: Network, moduleName: 'Organization Chart' },
     { id: 'reports', name: 'Reports & Export', icon: DownloadCloud, moduleName: 'Reports & Export' },
-    { id: 'settings', name: 'Settings (Users)', icon: Settings, moduleName: 'Settings (Users)' },
+    { id: 'settings', name: 'Settings', icon: Settings, moduleName: 'Settings' },
   ];
 
   const hasAccess = (moduleName: string) => {
@@ -84,17 +84,17 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels }: 
       <div className="w-full max-w-[1400px] h-[100vh] md:h-[90vh] bg-white md:rounded-xl shadow-2xl flex overflow-hidden">
         {/* Expandable Sidebar */}
         <div 
-          className="w-[80px] hover:w-[240px] transition-all duration-300 ease-in-out group bg-[#33495F] shrink-0 flex flex-col justify-between relative z-20 overflow-hidden"
+          className="w-[80px] hover:w-[240px] transition-all duration-300 ease-in-out group bg-[#2A3F54] shrink-0 flex flex-col justify-between relative z-20 overflow-hidden shadow-[4px_0_15px_rgba(0,0,0,0.1)]"
           onMouseLeave={() => setHoveredModule(null)}
         >
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="h-[80px] bg-[#2C3E50] flex items-center px-[24px] mb-4 overflow-hidden shrink-0">
-              <Mountain className="w-8 h-8 text-white shrink-0" />
-              <span className="ml-4 text-white font-bold text-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <div className="h-[80px] bg-[#1A2A3A] flex items-center px-[24px] mb-4 overflow-hidden shrink-0 shadow-sm relative z-10">
+              <Mountain className="w-8 h-8 text-white shrink-0 drop-shadow-md" />
+              <span className="ml-4 text-white font-black tracking-wide text-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 drop-shadow-md">
                 FRU ERP
               </span>
             </div>
-            <div className="py-2 space-y-1 flex-1 overflow-y-auto custom-scrollbar">
+            <div className="py-2 space-y-2 flex-1 overflow-y-auto custom-scrollbar">
               {filteredNavigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeModule === item.id;
@@ -105,21 +105,23 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels }: 
                     key={item.id}
                     onClick={() => setActiveModule(item.id as ModuleType)}
                     onMouseEnter={() => setHoveredModule(item.id)}
-                    className={`w-full h-14 flex items-center relative transition-colors px-[28px] ${
-                      isHighlighted ? 'text-[#F87C6C]' : 'text-white/60 hover:text-white'
+                    className={`w-full h-12 flex items-center relative transition-all duration-200 px-[28px] ${
+                      isHighlighted 
+                        ? 'text-[#F87C6C] transform translate-x-1' 
+                        : 'text-[#BAC8D6] hover:text-white'
                     }`}
                     title={item.name}
                   >
                     {isHighlighted && (
                       <motion.div
                         layoutId="sidebar-indicator"
-                        className="absolute inset-0 bg-white rounded-l-full ml-2"
+                        className="absolute inset-y-0 right-0 left-4 bg-white rounded-l-full shadow-[0_4px_0_0_#e2e8f0,inset_0_-2px_0_0_#f8fafc]"
                         initial={false}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
                       />
                     )}
-                    <Icon className="w-5 h-5 relative z-10 shrink-0" />
-                    <span className="ml-4 relative z-10 text-[13px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <Icon className={`w-5 h-5 relative z-10 shrink-0 ${isHighlighted ? 'drop-shadow-sm' : ''}`} />
+                    <span className="ml-4 relative z-10 text-[13px] font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       {item.name}
                     </span>
                   </button>
@@ -127,25 +129,27 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels }: 
               })}
             </div>
           </div>
-          <div className="pb-6 shrink-0 pt-2 border-t border-[#465A6F]">
+          <div className="pb-6 shrink-0 pt-4 border-t border-white/10 relative z-10">
             <button
               onClick={onLogout}
               onMouseEnter={() => setHoveredModule('logout')}
-              className={`w-full h-14 flex items-center relative transition-colors px-[28px] ${
-                hoveredModule === 'logout' ? 'text-[#F87C6C]' : 'text-white/60 hover:text-white'
+              className={`w-full h-12 flex items-center relative transition-all duration-200 px-[28px] ${
+                hoveredModule === 'logout' 
+                  ? 'text-[#F87C6C] transform translate-x-1' 
+                  : 'text-[#BAC8D6] hover:text-white'
               }`}
               title="Logout"
             >
               {hoveredModule === 'logout' && (
                 <motion.div
                   layoutId="sidebar-indicator"
-                  className="absolute inset-0 bg-white rounded-l-full ml-2"
+                  className="absolute inset-y-0 right-0 left-4 bg-white rounded-l-full shadow-[0_4px_0_0_#e2e8f0,inset_0_-2px_0_0_#f8fafc]"
                   initial={false}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 />
               )}
-              <LogOut className="w-5 h-5 relative z-10 shrink-0" />
-              <span className="ml-4 relative z-10 text-[13px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <LogOut className={`w-5 h-5 relative z-10 shrink-0 ${hoveredModule === 'logout' ? 'drop-shadow-sm' : ''}`} />
+              <span className="ml-4 relative z-10 text-[13px] font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 Logout
               </span>
             </button>

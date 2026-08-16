@@ -9,7 +9,8 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [spreadsheetId, setSpreadsheetId] = useState<string | null>(import.meta.env.VITE_SPREADSHEET_ID || localStorage.getItem('erp_spreadsheet_id'));
+  const FIXED_SPREADSHEET_ID = '1XSyh1o18PuQgSu3IoSbT9EcDHE08n-Gz8pA0kp8LxJ0';
+  const [spreadsheetId, setSpreadsheetId] = useState<string | null>(import.meta.env.VITE_SPREADSHEET_ID || FIXED_SPREADSHEET_ID || localStorage.getItem('erp_spreadsheet_id'));
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [authErrorMsg, setAuthErrorMsg] = useState<string | null>(null);

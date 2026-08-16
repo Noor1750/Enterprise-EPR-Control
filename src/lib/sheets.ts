@@ -40,7 +40,7 @@ export async function createSpreadsheet(): Promise<string> {
   // Now, initialize the headers for each sheet
   const headers = [
     { range: 'Users!A1:E1', values: [['Username', 'Password_Hash', 'Role', 'Status', 'Access_Level']] },
-    { range: 'Employees!A1:N1', values: [['ID_No', 'Name', 'Designation', 'Department', 'Date_of_Join', 'Current_Position', 'Supervisor_Name', 'Present_Salary', 'Overtime_Rate', 'Status', 'Inactive_Date', 'Phone', 'Emergency_Contact', 'Shift']] },
+    { range: 'Employees!A1:U1', values: [['ID_No', 'Name', 'Designation', 'Department', 'Date_of_Join', 'Current_Position', 'Supervisor_Name', 'Present_Salary', 'Overtime_Rate', 'Status', 'Inactive_Date', 'Phone', 'Emergency_Contact', 'Shift', 'Blood_Group', 'Working_Area', 'Profile_Picture', 'Manager', 'TShirt_Size', 'Shoe_Size', 'Volunteer']] },
     { range: 'MachineCapacity!A1:D1', values: [['Machine_Name', 'No_of_Machine', 'Product_Type', 'Speed_Per_Hour']] },
     { range: 'SkillMatrix!A1:C1', values: [['ID_No', 'Machine_Job', 'Skill_Level']] },
     { range: 'Leave!A1:J1', values: [['Leave_ID', 'ID_No', 'Name', 'Designation', 'Department', 'From_Date', 'To_Date', 'Days', 'Status', 'Supervisor_Signoff']] },

@@ -15,7 +15,7 @@ const TAB_MODULES = [
   'Best Practices',
   'Organization Chart',
   'Reports & Export',
-  'Settings (Users)',
+  'Settings',
   'Salary',
   'Overtime Rate'
 ];
@@ -41,6 +41,7 @@ const UPLOAD_MODULES = [
 export default function UserManagement({ spreadsheetId }: UserManagementProps) {
   const [users, setUsers] = useState<string[][]>([]);
   const [supervisors, setSupervisors] = useState<string[][]>([]);
+  const [employees, setEmployees] = useState<string[][]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'users' | 'supervisors'>('users');
   
@@ -74,6 +75,9 @@ export default function UserManagement({ spreadsheetId }: UserManagementProps) {
       
       const supRaw = await getRange(spreadsheetId, 'Supervisors');
       setSupervisors(supRaw.length > 1 ? supRaw.slice(1) : []);
+
+      const empRaw = await getRange(spreadsheetId, 'Employees').catch(() => []);
+      setEmployees(empRaw.length > 1 ? empRaw.slice(1) : []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -497,10 +501,17 @@ export default function UserManagement({ spreadsheetId }: UserManagementProps) {
                 <label className="block text-sm font-medium text-[#73879C] mb-1">Name *</label>
                 <input 
                   required 
+                  list="employee-names-list"
                   value={supFormData.name} 
                   onChange={e => setSupFormData({...supFormData, name: e.target.value})} 
+                  placeholder="Search by ID or Name..."
                   className="w-full px-3 py-2 border rounded-sm" 
                 />
+                <datalist id="employee-names-list">
+                  {employees.map(e => (
+                    <option key={e[0]} value={e[1]}>{e[0]} - {e[1]}</option>
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="block text-sm font-medium text-[#73879C] mb-1">Role *</label>
