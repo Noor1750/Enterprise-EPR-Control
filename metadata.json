@@ -1,6 +1,6 @@
 {
-  "name": "FRU Employee Management System",
-  "description": "An employee management and HRMS portal built using Google Sheets as a database.",
+  "name": "OPERATION ERP",
+  "description": "An enterprise operations and employee management ERP portal featuring an Executive Management Dashboard, real-time navigator health monitoring, machine capacity, shift assignment, leave workflow, and machine breakdown maintenance tracking.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

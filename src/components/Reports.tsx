@@ -3,7 +3,7 @@ import { getRange } from '../lib/sheets';
 import { Loader2, Download, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-const getXlsx = () => XLSX.utils ? XLSX : (XLSX as any).default;
+const getXlsx = () => XLSX;
 
 export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
   const [isExporting, setIsExporting] = useState(false);
@@ -23,6 +23,34 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
     'Supervisors',
   ];
 
+  const generateMachineCapacityReport = async (month?: string) => {
+    let raw = await getRange(spreadsheetId, 'MachineCapacity');
+    if (!raw || raw.length === 0) return [];
+    
+    if (month) {
+        // Machine capacity doesn't have a date by default, but if you want to filter, you might not be able to.
+        // We will just process all data since MachineCapacity isn't strictly month-based.
+        // Or if it is filtered, we apply month filter. But for now let's just return the processed array.
+    }
+    
+    // Process the data to remove "Operator Category" (index 2) and "Overtime" (index 14)
+    // We assume the header in the sheet might be the full 17 columns.
+    return raw.map(row => {
+        // If the row is from the 17-column format:
+        if (row.length >= 15) {
+             const newRow = [...row];
+             // Ensure it has 17 elements just in case
+             while (newRow.length < 17) newRow.push('');
+             
+             // Remove index 14 first so it doesn't shift index 2
+             newRow.splice(14, 1);
+             newRow.splice(2, 1);
+             return newRow;
+        }
+        return row;
+    });
+  };
+
   const generateOvertimeReport = async (month: string) => {
     const [otRaw, empRaw] = await Promise.all([
       getRange(spreadsheetId, 'Overtime'),
@@ -35,6 +63,7 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
     for (let i = 1; i <= 31; i++) {
       headers.push(i.toString());
     }
+    headers.push('Total Hours', 'OT Rate', 'Payable Amount');
 
     const rows: any[][] = [headers];
     let sl = 1;
@@ -66,7 +95,18 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
         }
       });
 
-      rows.push(row);
+      let totalHours = 0;
+      for (let i = 1; i <= 31; i++) {
+        const val = parseFloat(row[i + 4] || '0');
+        if (!isNaN(val) && val > 0) totalHours += val;
+      }
+      
+      if (totalHours > 0) {
+        const otRate = parseFloat(emp[8] || '0') || 0;
+        const payableAmount = totalHours * otRate;
+        row.push(totalHours.toFixed(1), otRate.toFixed(2), payableAmount.toFixed(2));
+        rows.push(row);
+      }
     });
 
     return rows;
@@ -99,6 +139,8 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
 
       if (selectedSheet === 'Overtime' && enableMonthFilter && selectedMonth) {
         dataToExport = await generateOvertimeReport(selectedMonth);
+      } else if (selectedSheet === 'MachineCapacity') {
+        dataToExport = await generateMachineCapacityReport();
       } else {
         const rawData = await getRange(spreadsheetId, selectedSheet);
         
@@ -149,6 +191,8 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
           let data: any[][] = [];
           if (sheet === 'Overtime' && enableMonthFilter && selectedMonth) {
             data = await generateOvertimeReport(selectedMonth);
+          } else if (sheet === 'MachineCapacity') {
+            data = await generateMachineCapacityReport();
           } else {
             const raw = await getRange(spreadsheetId, sheet);
             if (raw && raw.length > 0) {
