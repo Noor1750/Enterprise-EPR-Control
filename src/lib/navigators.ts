@@ -98,9 +98,9 @@ export const DEFAULT_SYSTEM_NAVIGATORS: SystemNavigator[] = [
   },
   {
     id: 'kpi',
-    name: 'Monthly KPI Navigator',
-    moduleName: 'Monthly KPI',
-    description: 'Monthly Performance Scorecards, Weightage Scoring & Goal Evaluations',
+    name: 'KPI Performance Navigator',
+    moduleName: 'KPI Performance',
+    description: 'Monthly KPI Scorecards, 10-Point Performance Evaluations & Structured Performance Review Cycles',
     category: 'Analytics & Quality',
     iconName: 'Target',
     status: 'Active'
@@ -130,6 +130,24 @@ export const DEFAULT_SYSTEM_NAVIGATORS: SystemNavigator[] = [
     description: 'Cross-functional Analytics, Audit Trails & Excel Export Utilities',
     category: 'Analytics & Quality',
     iconName: 'DownloadCloud',
+    status: 'Active'
+  },
+  {
+    id: 'anniversaries',
+    name: 'Birthdays & Anniversaries',
+    moduleName: 'All',
+    description: 'Company-Wide Celebrations: Staff Birthdays, Work Anniversaries, Milestone Badges & Warm Wishes',
+    category: 'Human Resources',
+    iconName: 'PartyPopper',
+    status: 'Active'
+  },
+  {
+    id: 'contact-portfolio',
+    name: 'Developer Contact',
+    moduleName: 'All',
+    description: 'Developer Profile, Portrait Photo, Direct Contact Channels & Support Inquiry Messenger',
+    category: 'Operations',
+    iconName: 'User',
     status: 'Active'
   },
   {

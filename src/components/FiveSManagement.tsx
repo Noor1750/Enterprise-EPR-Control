@@ -125,7 +125,7 @@ export default function FiveSManagement({
     setIsLoading(true);
     try {
       // 1. Fetch Employees Master
-      const empRaw = await getRange(spreadsheetId, 'Employees!A:V');
+      const empRaw = await getRange(spreadsheetId, 'Employees!A:Z');
       let loadedEmps: Employee[] = [];
       if (empRaw && empRaw.length > 1) {
         loadedEmps = empRaw.slice(1).map(row => ({
@@ -134,10 +134,11 @@ export default function FiveSManagement({
           designation: String(row[2] || '').trim(),
           department: String(row[3] || '').trim(),
           status: String(row[9] || 'Active').trim(),
-          workingArea: String(row[14] || row[4] || 'Floor 1').trim(),
-          shift: String(row[15] || 'Day Shift').trim(),
-          supervisor: String(row[16] || 'Sarah Connor').trim(),
-          manager: String(row[17] || 'Michael Scott').trim(),
+          workingArea: String(row[15] || row[14] || row[4] || 'Floor 1').trim(),
+          shift: String(row[13] || row[15] || 'Day Shift').trim(),
+          profilePicture: String(row[16] || '').trim(),
+          supervisor: String(row[17] || '').trim(),
+          manager: String(row[17] || '').trim(),
         })).filter(e => e.id);
         setEmployees(loadedEmps);
       }
@@ -260,6 +261,20 @@ export default function FiveSManagement({
 
   useEffect(() => {
     loadData();
+
+    const handleContext = (e: any) => {
+      if (e.detail?.moduleId === '5s-management') {
+        if (e.detail.action === 'new-audit') {
+          setActiveTab('assessments');
+          setEditingAssessment(null);
+          setIsAssessmentModalOpen(true);
+        } else if (e.detail.search) {
+          setSearchTerm(e.detail.search);
+        }
+      }
+    };
+    window.addEventListener('erp-module-context', handleContext);
+    return () => window.removeEventListener('erp-module-context', handleContext);
   }, [spreadsheetId]);
 
   // Security Scoped Filter: Filter records based on role / scope
@@ -326,9 +341,23 @@ export default function FiveSManagement({
     return result.allRanked;
   }, [currentMonthAssessments, correctiveActions, scopedAssessments, selectedMonth, settings]);
 
+  // Map for fast employee profile photo lookups
+  const employeePhotoMap = useMemo(() => {
+    const map = new Map<string, string>();
+    employees.forEach(e => {
+      if (e.id && (e.profilePicture || (e as any).photoUrl)) {
+        map.set(e.id.toLowerCase().trim(), e.profilePicture || (e as any).photoUrl || '');
+      }
+    });
+    return map;
+  }, [employees]);
+
   const displayedTop3 = useMemo(() => {
     if (monthDeclaredWinners.length > 0) {
-      return monthDeclaredWinners;
+      return monthDeclaredWinners.map(w => ({
+        ...w,
+        photoUrl: w.photoUrl || employeePhotoMap.get((w.employeeId || '').toLowerCase().trim()) || ''
+      }));
     }
     // Convert live rankings top 3 to winner preview format
     return liveRankings.slice(0, 3).map((r, idx) => ({
@@ -344,11 +373,12 @@ export default function FiveSManagement({
       visualScore: r.visualScore,
       finalScore: r.finalScore,
       rating: r.ratingLabel,
+      photoUrl: employeePhotoMap.get((r.employeeId || '').toLowerCase().trim()) || '',
       declaredBy: 'Live Auto-Rank (Pending Declaration)',
       declaredAt: new Date().toISOString(),
       remarks: `Provisional #${idx + 1} place rank based on current 5S audit score.`
     }));
-  }, [monthDeclaredWinners, liveRankings, selectedMonth]);
+  }, [monthDeclaredWinners, liveRankings, selectedMonth, employeePhotoMap]);
 
   // Department KPI stats
   const departmentStats = useMemo(() => {
@@ -854,54 +884,81 @@ export default function FiveSManagement({
 
             {displayedTop3.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {displayedTop3.map((win, idx) => (
-                  <div 
-                    key={win.id || idx}
-                    className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
-                      win.rank === 1
-                        ? 'bg-amber-500/10 border-amber-500/40 shadow-lg'
-                        : win.rank === 2
-                        ? 'bg-slate-800/80 border-slate-700'
-                        : 'bg-amber-900/20 border-amber-800/40'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase ${
-                          win.rank === 1 ? 'bg-amber-400 text-slate-950' :
-                          win.rank === 2 ? 'bg-slate-300 text-slate-950' :
-                          'bg-amber-700 text-white'
-                        }`}>
-                          {win.rank === 1 ? '🥇 1st Place Gold' : win.rank === 2 ? '🥈 2nd Place Silver' : '🥉 3rd Place Bronze'}
-                        </span>
-                        <span className="text-2xl font-black text-white">{win.finalScore}%</span>
-                      </div>
-                      <h3 className="text-sm font-extrabold text-white">{win.employeeName}</h3>
-                      <p className="text-xs text-slate-300 mt-0.5">{win.department} • {win.designation}</p>
-                    </div>
+                {displayedTop3.map((win, idx) => {
+                  const empPhoto = (win as any).photoUrl || employeePhotoMap.get((win.employeeId || '').toLowerCase().trim()) || '';
+                  return (
+                    <div 
+                      key={win.id || idx}
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                        win.rank === 1
+                          ? 'bg-amber-500/10 border-amber-500/40 shadow-lg ring-1 ring-amber-400/30'
+                          : win.rank === 2
+                          ? 'bg-slate-800/80 border-slate-700'
+                          : 'bg-amber-900/20 border-amber-800/40'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase ${
+                            win.rank === 1 ? 'bg-amber-400 text-slate-950' :
+                            win.rank === 2 ? 'bg-slate-300 text-slate-950' :
+                            'bg-amber-700 text-white'
+                          }`}>
+                            {win.rank === 1 ? '🥇 1st Place Gold' : win.rank === 2 ? '🥈 2nd Place Silver' : '🥉 3rd Place Bronze'}
+                          </span>
+                          <span className="text-2xl font-black text-white">{win.finalScore}%</span>
+                        </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
-                      <span>5S: <strong className="text-slate-200">{win.total5SScore}%</strong></span>
-                      <span>Visual: <strong className="text-slate-200">{win.visualScore}%</strong></span>
-                      <button
-                        onClick={() => {
-                          const emp = employees.find(e => e.id === win.employeeId) || {
-                            id: win.employeeId,
-                            name: win.employeeName,
-                            department: win.department,
-                            designation: win.designation,
-                            status: 'Active'
-                          };
-                          setSelectedProfileEmployee(emp);
-                          setIsProfileModalOpen(true);
-                        }}
-                        className="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-0.5"
-                      >
-                        Profile <ArrowUpRight className="w-3 h-3" />
-                      </button>
+                        {/* Employee Avatar & Info Card */}
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 overflow-hidden shadow-md border-2 ${
+                            win.rank === 1 ? 'border-amber-400 bg-amber-400/20 text-amber-300' :
+                            win.rank === 2 ? 'border-slate-300 bg-slate-700 text-slate-200' :
+                            'border-amber-700 bg-amber-900/40 text-amber-300'
+                          }`}>
+                            {empPhoto ? (
+                              <img 
+                                src={empPhoto} 
+                                alt={win.employeeName} 
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover" 
+                              />
+                            ) : (
+                              <span>{(win.employeeName || 'U').charAt(0)}</span>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="text-sm font-extrabold text-white truncate">{win.employeeName}</h3>
+                            <p className="text-xs text-slate-300 truncate">{win.department} • {win.designation}</p>
+                            <span className="text-[10px] text-slate-400 font-mono">ID: {win.employeeId}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
+                        <span>5S: <strong className="text-slate-200">{win.total5SScore}%</strong></span>
+                        <span>Visual: <strong className="text-slate-200">{win.visualScore}%</strong></span>
+                        <button
+                          onClick={() => {
+                            const emp = employees.find(e => e.id === win.employeeId) || {
+                              id: win.employeeId,
+                              name: win.employeeName,
+                              department: win.department,
+                              designation: win.designation,
+                              status: 'Active',
+                              profilePicture: empPhoto
+                            };
+                            setSelectedProfileEmployee(emp);
+                            setIsProfileModalOpen(true);
+                          }}
+                          className="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-0.5 cursor-pointer"
+                        >
+                          Profile <ArrowUpRight className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="p-8 text-center text-xs text-slate-400">
@@ -1357,71 +1414,94 @@ export default function FiveSManagement({
 
           {/* Top 3 Podium Display */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-            {displayedTop3.map((win) => (
-              <div
-                key={win.id || win.rank}
-                className={`p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden transition-all shadow-md ${
-                  win.rank === 1
-                    ? 'bg-gradient-to-b from-amber-50 to-white border-amber-300 ring-2 ring-amber-400/20'
-                    : win.rank === 2
-                    ? 'bg-gradient-to-b from-slate-50 to-white border-slate-300'
-                    : 'bg-gradient-to-b from-amber-50/50 to-white border-amber-200'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
-                      win.rank === 1 ? 'bg-amber-400 text-slate-950' :
-                      win.rank === 2 ? 'bg-slate-300 text-slate-900' :
-                      'bg-amber-700 text-white'
-                    }`}>
-                      {win.rank === 1 ? '🥇 1st Gold Winner' : win.rank === 2 ? '🥈 2nd Silver Winner' : '🥉 3rd Bronze Winner'}
-                    </span>
-                    <span className="text-3xl font-black text-slate-900">{win.finalScore}%</span>
+            {displayedTop3.map((win) => {
+              const empPhoto = (win as any).photoUrl || employeePhotoMap.get((win.employeeId || '').toLowerCase().trim()) || '';
+              return (
+                <div
+                  key={win.id || win.rank}
+                  className={`p-6 rounded-2xl border flex flex-col justify-between relative overflow-hidden transition-all shadow-md ${
+                    win.rank === 1
+                      ? 'bg-gradient-to-b from-amber-50 to-white border-amber-300 ring-2 ring-amber-400/20'
+                      : win.rank === 2
+                      ? 'bg-gradient-to-b from-slate-50 to-white border-slate-300'
+                      : 'bg-gradient-to-b from-amber-50/50 to-white border-amber-200'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
+                        win.rank === 1 ? 'bg-amber-400 text-slate-950' :
+                        win.rank === 2 ? 'bg-slate-300 text-slate-900' :
+                        'bg-amber-700 text-white'
+                      }`}>
+                        {win.rank === 1 ? '🥇 1st Gold Winner' : win.rank === 2 ? '🥈 2nd Silver Winner' : '🥉 3rd Bronze Winner'}
+                      </span>
+                      <span className="text-3xl font-black text-slate-900">{win.finalScore}%</span>
+                    </div>
+
+                    {/* Employee Profile Photo & Details */}
+                    <div className="flex items-center gap-3.5 mb-3">
+                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-xl shrink-0 overflow-hidden shadow-md border-2 ${
+                        win.rank === 1 ? 'border-amber-400 bg-amber-100 text-amber-800' :
+                        win.rank === 2 ? 'border-slate-300 bg-slate-100 text-slate-700' :
+                        'border-amber-600 bg-amber-100 text-amber-900'
+                      }`}>
+                        {empPhoto ? (
+                          <img 
+                            src={empPhoto} 
+                            alt={win.employeeName} 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : (
+                          <span>{(win.employeeName || 'U').charAt(0)}</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-black text-slate-900 truncate">{win.employeeName}</h3>
+                        <p className="text-xs text-slate-600 truncate">{win.designation}</p>
+                        <p className="text-xs font-semibold text-slate-500 truncate">{win.department} {win.section ? `(${win.section})` : ''}</p>
+                        <span className="text-[11px] font-mono font-bold text-slate-400">ID: {win.employeeId}</span>
+                      </div>
+                    </div>
                   </div>
 
-                  <h3 className="text-lg font-black text-slate-900 mt-2">{win.employeeName}</h3>
-                  <div className="text-xs text-slate-600 space-y-0.5 mt-1">
-                    <p><strong className="text-slate-800">ID:</strong> {win.employeeId}</p>
-                    <p><strong className="text-slate-800">Department:</strong> {win.department} ({win.section})</p>
-                    <p><strong className="text-slate-800">Designation:</strong> {win.designation}</p>
+                  <div className="mt-4 pt-4 border-t border-slate-200 space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-semibold">5S Score:</span>
+                      <span className="font-bold text-slate-800">{win.total5SScore}%</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-semibold">Visual Mgmt:</span>
+                      <span className="font-bold text-slate-800">{win.visualScore}%</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-semibold">Rating:</span>
+                      <span className="font-extrabold text-emerald-600">{win.rating}</span>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        const emp = employees.find(e => e.id === win.employeeId) || {
+                          id: win.employeeId,
+                          name: win.employeeName,
+                          department: win.department,
+                          designation: win.designation,
+                          status: 'Active',
+                          profilePicture: empPhoto
+                        };
+                        setSelectedProfileEmployee(emp);
+                        setIsProfileModalOpen(true);
+                      }}
+                      className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Award className="w-3.5 h-3.5 text-amber-400" />
+                      <span>View Official 5S Scorecard</span>
+                    </button>
                   </div>
                 </div>
-
-                <div className="mt-6 pt-4 border-t border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-semibold">5S Score:</span>
-                    <span className="font-bold text-slate-800">{win.total5SScore}%</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-semibold">Visual Mgmt:</span>
-                    <span className="font-bold text-slate-800">{win.visualScore}%</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-semibold">Rating:</span>
-                    <span className="font-extrabold text-emerald-600">{win.rating}</span>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      const emp = employees.find(e => e.id === win.employeeId) || {
-                        id: win.employeeId,
-                        name: win.employeeName,
-                        department: win.department,
-                        designation: win.designation,
-                        status: 'Active'
-                      };
-                      setSelectedProfileEmployee(emp);
-                      setIsProfileModalOpen(true);
-                    }}
-                    className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center gap-1"
-                  >
-                    <Award className="w-3.5 h-3.5 text-amber-400" />
-                    <span>View Official 5S Scorecard</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Full Monthly Rankings Leaderboard Table */}

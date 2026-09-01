@@ -14,6 +14,29 @@ export const setErpName = (name: string) => {
   localStorage.setItem('erp_system_name', name);
 };
 
+export const getErpIcon = (): string | null => {
+  return localStorage.getItem('erp_custom_animated_icon') || null;
+};
+
+export const setErpIcon = (dataUrl: string): void => {
+  localStorage.setItem('erp_custom_animated_icon', dataUrl);
+  window.dispatchEvent(new CustomEvent('erp-icon-changed', { detail: { icon: dataUrl } }));
+};
+
+export const removeErpIcon = (): void => {
+  localStorage.removeItem('erp_custom_animated_icon');
+  window.dispatchEvent(new CustomEvent('erp-icon-changed', { detail: { icon: null } }));
+};
+
+export const getErpIconAnimation = (): string => {
+  return localStorage.getItem('erp_icon_animation_style') || 'pulse';
+};
+
+export const setErpIconAnimation = (anim: string): void => {
+  localStorage.setItem('erp_icon_animation_style', anim);
+  window.dispatchEvent(new CustomEvent('erp-icon-anim-changed', { detail: { anim } }));
+};
+
 export const DEFAULT_ADMIN_DELETE_PASSWORD = '123456';
 
 export const getAdminDeletePassword = (): string => {

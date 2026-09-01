@@ -5,8 +5,9 @@ import {
   Loader2, Check, X, Download, Search, Shield, Clock, 
   Calendar, CheckSquare, History, FileCheck2, Filter, 
   RotateCw, CheckCircle2, AlertCircle, PlusCircle, UserCheck,
-  Edit2, Trash2, AlertTriangle, Info, CalendarDays, Ban
+  Edit2, Trash2, AlertTriangle, Info, CalendarDays, Ban, CreditCard
 } from 'lucide-react';
+import LeaveBalanceManager from './leave/LeaveBalanceManager';
 import { parseISO, eachDayOfInterval, isFriday, format, isValid } from 'date-fns';
 import { UserSecurityScope, filterAuthorizedEmployees, getAuthorizedEmployeeIdSet } from '../lib/security';
 import { 
@@ -18,6 +19,7 @@ import {
   normalizeDateStr
 } from '../lib/leaveValidation';
 import AdminDeleteConfirmModal from './common/AdminDeleteConfirmModal';
+import { resolvePaletteForModule } from '../lib/colorPalettes';
 
 interface LeaveManagementProps {
   spreadsheetId: string;
@@ -26,7 +28,7 @@ interface LeaveManagementProps {
   userSecurityScope?: UserSecurityScope;
 }
 
-type TabType = 'apply' | 'approval' | 'hrPending' | 'history' | 'audit';
+type TabType = 'apply' | 'approval' | 'hrPending' | 'history' | 'audit' | 'balances';
 
 export default function LeaveManagement({ 
   spreadsheetId, 
@@ -172,8 +174,31 @@ export default function LeaveManagement({
         loadData(false);
       }
     };
+
+    const handleContext = (e: any) => {
+      if (e.detail?.moduleId === 'leave') {
+        if (e.detail.action === 'apply') {
+          setActiveTab('apply');
+        } else if (e.detail.action === 'approval') {
+          setActiveTab('approval');
+        } else if (e.detail.action === 'hr-pending' || e.detail.action === 'hrPending') {
+          setActiveTab('hrPending');
+        } else if (e.detail.action === 'history') {
+          setActiveTab('history');
+        }
+        if (e.detail.search) {
+          setApplySearch(e.detail.search);
+          setApprovalSearch(e.detail.search);
+        }
+      }
+    };
+
     window.addEventListener('erp-db-updated', handleDbUpdate);
-    return () => window.removeEventListener('erp-db-updated', handleDbUpdate);
+    window.addEventListener('erp-module-context', handleContext);
+    return () => {
+      window.removeEventListener('erp-db-updated', handleDbUpdate);
+      window.removeEventListener('erp-module-context', handleContext);
+    };
   }, [spreadsheetId, userSecurityScope]);
 
   // Toast auto-dismiss
@@ -911,132 +936,160 @@ export default function LeaveManagement({
       )}
 
       {/* Header Banner & Workflow Pipeline Metrics */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <Calendar className="w-6 h-6 text-[#1ABB9C]" />
-              <h1 className="text-xl font-black text-gray-900">Leave Management Hub</h1>
+      {(() => {
+        const palette = resolvePaletteForModule('leave');
+        return (
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shadow-xs"
+                    style={{
+                      backgroundColor: `${palette.primaryHex}15`,
+                      color: palette.primaryHex
+                    }}
+                  >
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-xl font-black text-gray-900">Leave Management Hub</h1>
+                      <span 
+                        className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: palette.pillBg,
+                          color: palette.pillText
+                        }}
+                      >
+                        HR & Staffing
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      End-to-end leave lifecycle: Application → Supervisor Approval → HR Pending Settlement → Archive.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => loadData(false)}
+                  disabled={isRefreshing}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors cursor-pointer group"
+                  style={{ color: isRefreshing ? palette.primaryHex : undefined }}
+                >
+                  <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                  Refresh
+                </button>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              End-to-end leave lifecycle: Application → Supervisor Approval → HR Pending Settlement → Archive.
-            </p>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => loadData(false)}
-              disabled={isRefreshing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-[#1ABB9C] hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors"
-            >
-              <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
-        </div>
+            {/* Workflow Metric Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6">
+              <div 
+                onClick={() => setActiveTab('apply')}
+                className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  activeTab === 'apply' ? 'bg-gray-100/90 border-gray-400 ring-2 ring-gray-400/30' : 'bg-gray-50/70 border-gray-200 hover:bg-gray-100/50'
+                }`}
+              >
+                <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Applied</div>
+                <div className="text-2xl font-black text-gray-900 mt-0.5">{counts.total}</div>
+              </div>
 
-        {/* Workflow Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6">
-          <div 
-            onClick={() => setActiveTab('apply')}
-            className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-              activeTab === 'apply' ? 'bg-gray-100/90 border-gray-400 ring-2 ring-gray-400/30' : 'bg-gray-50/70 border-gray-200 hover:bg-gray-100/50'
-            }`}
-          >
-            <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Applied</div>
-            <div className="text-2xl font-black text-gray-900 mt-0.5">{counts.total}</div>
-          </div>
+              <div 
+                onClick={() => setActiveTab('approval')}
+                className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  activeTab === 'approval' ? 'bg-yellow-100/70 border-yellow-400 ring-2 ring-yellow-400/30' : 'bg-yellow-50/60 border-yellow-200 hover:bg-yellow-100/40'
+                }`}
+              >
+                <div className="text-[11px] font-bold text-yellow-800 uppercase tracking-wider flex items-center justify-between">
+                  <span>Pending Review</span>
+                  {counts.pendingApproval > 0 && (
+                    <span className="bg-yellow-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-black">
+                      {counts.pendingApproval}
+                    </span>
+                  )}
+                </div>
+                <div className="text-2xl font-black text-yellow-900 mt-0.5">{counts.pendingApproval}</div>
+              </div>
 
-          <div 
-            onClick={() => setActiveTab('approval')}
-            className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-              activeTab === 'approval' ? 'bg-yellow-100/70 border-yellow-400 ring-2 ring-yellow-400/30' : 'bg-yellow-50/60 border-yellow-200 hover:bg-yellow-100/40'
-            }`}
-          >
-            <div className="text-[11px] font-bold text-yellow-800 uppercase tracking-wider flex items-center justify-between">
-              <span>Pending Review</span>
-              {counts.pendingApproval > 0 && (
-                <span className="bg-yellow-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-black">
-                  {counts.pendingApproval}
-                </span>
-              )}
+              <div 
+                onClick={() => setActiveTab('hrPending')}
+                className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  activeTab === 'hrPending' ? 'bg-blue-100/70 border-blue-400 ring-2 ring-blue-400/30' : 'bg-blue-50/60 border-blue-200 hover:bg-blue-100/40'
+                }`}
+              >
+                <div className="text-[11px] font-bold text-blue-800 uppercase tracking-wider flex items-center justify-between">
+                  <span>HR Pending</span>
+                  {counts.hrPending > 0 && (
+                    <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-black">
+                      {counts.hrPending}
+                    </span>
+                  )}
+                </div>
+                <div className="text-2xl font-black text-blue-900 mt-0.5">{counts.hrPending}</div>
+              </div>
+
+              <div 
+                onClick={() => setActiveTab('history')}
+                className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                  activeTab === 'history' ? 'bg-purple-100/70 border-purple-400 ring-2 ring-purple-400/30' : 'bg-purple-50/60 border-purple-200 hover:bg-purple-100/40'
+                }`}
+              >
+                <div className="text-[11px] font-bold text-purple-800 uppercase tracking-wider">Settled</div>
+                <div className="text-2xl font-black text-purple-900 mt-0.5">{counts.settled}</div>
+              </div>
+
+              <div className="p-3.5 rounded-xl border bg-rose-50/50 border-rose-200">
+                <div className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Rejected</div>
+                <div className="text-2xl font-black text-rose-900 mt-0.5">{counts.rejected}</div>
+              </div>
             </div>
-            <div className="text-2xl font-black text-yellow-900 mt-0.5">{counts.pendingApproval}</div>
-          </div>
 
-          <div 
-            onClick={() => setActiveTab('hrPending')}
-            className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-              activeTab === 'hrPending' ? 'bg-blue-100/70 border-blue-400 ring-2 ring-blue-400/30' : 'bg-blue-50/60 border-blue-200 hover:bg-blue-100/40'
-            }`}
-          >
-            <div className="text-[11px] font-bold text-blue-800 uppercase tracking-wider flex items-center justify-between">
-              <span>HR Pending</span>
-              {counts.hrPending > 0 && (
-                <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-black">
-                  {counts.hrPending}
-                </span>
-              )}
-            </div>
-            <div className="text-2xl font-black text-blue-900 mt-0.5">{counts.hrPending}</div>
-          </div>
+            {/* Consolidated Smart Tab Bar */}
+            <div className="flex border-b border-gray-200 mt-6 -mb-6 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('apply')}
+                className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer group ${
+                  activeTab === 'apply'
+                    ? 'border-current font-black'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+                style={activeTab === 'apply' ? { color: palette.primaryHex, borderColor: palette.primaryHex } : undefined}
+              >
+                <PlusCircle className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90 group-hover-icon-anim" />
+                Apply & My Leaves
+              </button>
 
-          <div 
-            onClick={() => setActiveTab('history')}
-            className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-              activeTab === 'history' ? 'bg-purple-100/70 border-purple-400 ring-2 ring-purple-400/30' : 'bg-purple-50/60 border-purple-200 hover:bg-purple-100/40'
-            }`}
-          >
-            <div className="text-[11px] font-bold text-purple-800 uppercase tracking-wider">Settled</div>
-            <div className="text-2xl font-black text-purple-900 mt-0.5">{counts.settled}</div>
-          </div>
+              <button
+                onClick={() => setActiveTab('approval')}
+                className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer group ${
+                  activeTab === 'approval'
+                    ? 'border-current font-black'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+                style={activeTab === 'approval' ? { color: palette.primaryHex, borderColor: palette.primaryHex } : undefined}
+              >
+                <UserCheck className="w-4 h-4 transition-transform duration-300 group-hover:scale-110 group-hover-icon-anim" />
+                Supervisor Approval
+                {counts.pendingApproval > 0 && (
+                  <span className="bg-yellow-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                    {counts.pendingApproval}
+                  </span>
+                )}
+              </button>
 
-          <div className="p-3.5 rounded-xl border bg-rose-50/50 border-rose-200">
-            <div className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Rejected</div>
-            <div className="text-2xl font-black text-rose-900 mt-0.5">{counts.rejected}</div>
-          </div>
-        </div>
-
-        {/* Consolidated Smart Tab Bar */}
-        <div className="flex border-b border-gray-200 mt-6 -mb-6 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('apply')}
-            className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'apply'
-                ? 'border-[#1ABB9C] text-[#1ABB9C]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <PlusCircle className="w-4 h-4" />
-            Apply & My Leaves
-          </button>
-
-          <button
-            onClick={() => setActiveTab('approval')}
-            className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'approval'
-                ? 'border-[#1ABB9C] text-[#1ABB9C]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <UserCheck className="w-4 h-4" />
-            Supervisor Approval
-            {counts.pendingApproval > 0 && (
-              <span className="bg-yellow-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
-                {counts.pendingApproval}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('hrPending')}
-            className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'hrPending'
-                ? 'border-[#1ABB9C] text-[#1ABB9C]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
+              <button
+                onClick={() => setActiveTab('hrPending')}
+                className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer group ${
+                  activeTab === 'hrPending'
+                    ? 'border-current font-black'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+                style={activeTab === 'hrPending' ? { color: palette.primaryHex, borderColor: palette.primaryHex } : undefined}
+              >
+                <Clock className="w-4 h-4 transition-transform duration-300 group-hover:scale-110 group-hover-icon-anim" />
             HR Pending Settlement
             {counts.hrPending > 0 && (
               <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">
@@ -1045,31 +1098,48 @@ export default function LeaveManagement({
             )}
           </button>
 
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'history'
-                ? 'border-[#1ABB9C] text-[#1ABB9C]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <History className="w-4 h-4" />
-            Settlement History
-          </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer group ${
+                  activeTab === 'history'
+                    ? 'border-current font-black'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+                style={activeTab === 'history' ? { color: palette.primaryHex, borderColor: palette.primaryHex } : undefined}
+              >
+                <History className="w-4 h-4 transition-transform duration-300 group-hover:scale-110 group-hover-icon-anim" />
+                Settlement History
+              </button>
 
-          <button
-            onClick={() => setActiveTab('audit')}
-            className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'audit'
-                ? 'border-[#1ABB9C] text-[#1ABB9C]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Shield className="w-4 h-4" />
-            Audit Trail
-          </button>
-        </div>
-      </div>
+              <button
+                onClick={() => setActiveTab('balances')}
+                className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer group ${
+                  activeTab === 'balances'
+                    ? 'border-current font-black'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+                style={activeTab === 'balances' ? { color: palette.primaryHex, borderColor: palette.primaryHex } : undefined}
+              >
+                <CreditCard className="w-4 h-4 transition-transform duration-300 group-hover:scale-110 group-hover-icon-anim" />
+                Leave Balances & Quotas
+              </button>
+
+              <button
+                onClick={() => setActiveTab('audit')}
+                className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer group ${
+                  activeTab === 'audit'
+                    ? 'border-current font-black'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+                style={activeTab === 'audit' ? { color: palette.primaryHex, borderColor: palette.primaryHex } : undefined}
+              >
+                <Shield className="w-4 h-4 transition-transform duration-300 group-hover:scale-110 group-hover-icon-anim" />
+                Audit Trail
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ================= TAB 1: APPLY & MY LEAVES ================= */}
       {activeTab === 'apply' && (
@@ -2009,6 +2079,17 @@ export default function LeaveManagement({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ================= TAB 6: LEAVE BALANCES & QUOTAS ================= */}
+      {activeTab === 'balances' && (
+        <LeaveBalanceManager
+          spreadsheetId={spreadsheetId}
+          employees={allEmployees}
+          leaves={leaves}
+          userSecurityScope={userSecurityScope}
+          onRefreshLeaves={() => loadData(false)}
+        />
       )}
 
       {/* CONFIRMATION POPUP MODAL */}

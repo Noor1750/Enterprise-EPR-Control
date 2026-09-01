@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { format, isToday, isTomorrow, isThisWeek, parseISO, isPast, isValid } from 'date-fns';
 import * as XLSX from 'xlsx';
+import { resolvePaletteForModule } from '../lib/colorPalettes';
 
 interface TasksProps {
   spreadsheetId: string;
@@ -127,8 +128,23 @@ export default function Tasks({ spreadsheetId, user, userSecurityScope }: TasksP
       }
     };
 
+    const handleContext = (e: any) => {
+      if (e.detail?.moduleId === 'tasks') {
+        if (e.detail.action === 'new-task') {
+          setEditingTask(null);
+          setIsFormOpen(true);
+        } else if (e.detail.search) {
+          setSearchTerm(e.detail.search);
+        }
+      }
+    };
+
     window.addEventListener('erp-db-updated', handleDbUpdate);
-    return () => window.removeEventListener('erp-db-updated', handleDbUpdate);
+    window.addEventListener('erp-module-context', handleContext);
+    return () => {
+      window.removeEventListener('erp-db-updated', handleDbUpdate);
+      window.removeEventListener('erp-module-context', handleContext);
+    };
   }, [spreadsheetId, userSecurityScope]);
 
   const handleSaveTask = async (taskData: Partial<Task>) => {
@@ -499,54 +515,71 @@ export default function Tasks({ spreadsheetId, user, userSecurityScope }: TasksP
       )}
 
       {/* Main Header with Actions */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-xs ${
-            isAdminOrManager ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-[#1ECA98]'
-          }`}>
-            {isAdminOrManager ? <ShieldCheck className="w-6 h-6" /> : <CheckSquare className="w-6 h-6" />}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-black text-[#33495F] tracking-tight">
-                {isAdminOrManager ? 'Daily Tasks — Management & Operations' : 'Daily Tasks — My Work Queue'}
-              </h2>
-              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                isAdminOrManager ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'
-              }`}>
-                {isAdminOrManager ? 'Admin Mode (All Tasks)' : 'Assigned Person View'}
-              </span>
+      {(() => {
+        const palette = resolvePaletteForModule('tasks');
+        return (
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-4">
+              <div 
+                className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-xs transition-transform duration-300 hover:scale-105"
+                style={{
+                  backgroundColor: `${palette.primaryHex}15`,
+                  color: palette.primaryHex
+                }}
+              >
+                {isAdminOrManager ? <ShieldCheck className="w-6 h-6" /> : <CheckSquare className="w-6 h-6" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-black text-[#33495F] tracking-tight">
+                    {isAdminOrManager ? 'Daily Tasks — Management & Operations' : 'Daily Tasks — My Work Queue'}
+                  </h2>
+                  <span 
+                    className="text-xs font-bold px-2.5 py-0.5 rounded-full"
+                    style={{
+                      backgroundColor: palette.pillBg,
+                      color: palette.pillText
+                    }}
+                  >
+                    {isAdminOrManager ? 'Admin Mode (All Tasks)' : 'Assigned Person View'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 font-medium mt-0.5">
+                  {isAdminOrManager 
+                    ? 'Oversee all enterprise daily tasks, monitor department completion, and manage assignments.' 
+                    : 'Track your assigned responsibilities, update progress in 1-click, and meet deadlines.'}
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 font-medium mt-0.5">
-              {isAdminOrManager 
-                ? 'Oversee all enterprise daily tasks, monitor department completion, and manage assignments.' 
-                : 'Track your assigned responsibilities, update progress in 1-click, and meet deadlines.'}
-            </p>
+            
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all cursor-pointer group"
+                title="Export filtered tasks to Excel"
+              >
+                <Download className="w-4 h-4 transition-transform duration-300 group-hover:-translate-y-0.5" />
+                Export
+              </button>
+              
+              <button
+                onClick={() => {
+                  setEditingTask(null);
+                  setIsFormOpen(true);
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 text-xs font-black rounded-xl transition-all shadow-sm hover:shadow-md cursor-pointer group active:scale-95"
+                style={{
+                  background: `linear-gradient(135deg, ${palette.primaryHex}, #3E4B0B)`,
+                  color: palette.secondaryHex
+                }}
+              >
+                <Plus className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90 group-hover-icon-anim" />
+                Create Task
+              </button>
+            </div>
           </div>
-        </div>
-        
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all"
-            title="Export filtered tasks to Excel"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
-          
-          <button
-            onClick={() => {
-              setEditingTask(null);
-              setIsFormOpen(true);
-            }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#1ECA98] to-[#16a77d] hover:from-[#19b98a] hover:to-[#13946e] text-white text-xs font-black rounded-xl transition-all shadow-sm hover:shadow-md"
-          >
-            <Plus className="w-4 h-4" />
-            Create Task
-          </button>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Interactive Task Dashboard with Scope & Perspective */}
       <TaskDashboard 

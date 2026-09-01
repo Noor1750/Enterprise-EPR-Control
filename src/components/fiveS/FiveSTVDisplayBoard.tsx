@@ -153,10 +153,17 @@ export default function FiveSTVDisplayBoard({
                   </div>
                   {top2 ? (
                     <>
-                      <div className="text-slate-300 font-extrabold text-xs uppercase mb-1">🥈 Silver Award</div>
+                      <div className="w-14 h-14 mx-auto mb-2 rounded-2xl border-2 border-slate-300 overflow-hidden bg-slate-700 flex items-center justify-center shadow-md">
+                        {(top2 as any).photoUrl ? (
+                          <img src={(top2 as any).photoUrl} alt={top2.employeeName} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-white font-black text-lg">{(top2.employeeName || 'U').charAt(0)}</span>
+                        )}
+                      </div>
+                      <div className="text-slate-300 font-extrabold text-[11px] uppercase mb-0.5">🥈 Silver Award</div>
                       <div className="text-white font-black text-sm truncate">{top2.employeeName}</div>
                       <div className="text-[11px] text-slate-400 truncate">{top2.department} • {top2.designation}</div>
-                      <div className="mt-3 pt-2 border-t border-slate-700/60">
+                      <div className="mt-2 pt-2 border-t border-slate-700/60">
                         <span className="text-2xl font-black text-slate-200">{top2.finalScore}%</span>
                       </div>
                     </>
@@ -172,10 +179,17 @@ export default function FiveSTVDisplayBoard({
                   </div>
                   {top1 ? (
                     <>
-                      <div className="text-amber-400 font-black text-xs uppercase tracking-wider mb-1">🥇 1st Place Gold Champion</div>
+                      <div className="w-16 h-16 mx-auto mb-2 rounded-2xl border-2 border-amber-400 overflow-hidden bg-amber-900/40 flex items-center justify-center shadow-lg ring-2 ring-amber-400/30">
+                        {(top1 as any).photoUrl ? (
+                          <img src={(top1 as any).photoUrl} alt={top1.employeeName} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-amber-300 font-black text-xl">{(top1.employeeName || 'U').charAt(0)}</span>
+                        )}
+                      </div>
+                      <div className="text-amber-400 font-black text-xs uppercase tracking-wider mb-0.5">🥇 1st Place Gold Champion</div>
                       <div className="text-white font-black text-base truncate">{top1.employeeName}</div>
                       <div className="text-xs text-slate-300 truncate">{top1.department} • {top1.designation}</div>
-                      <div className="mt-4 pt-2 border-t border-amber-500/30">
+                      <div className="mt-3 pt-2 border-t border-amber-500/30">
                         <span className="text-3xl font-black text-amber-400">{top1.finalScore}%</span>
                         <span className="block text-[10px] text-amber-200/80 font-bold uppercase mt-0.5">Top Housekeeping Honor</span>
                       </div>
@@ -192,10 +206,17 @@ export default function FiveSTVDisplayBoard({
                   </div>
                   {top3 ? (
                     <>
-                      <div className="text-amber-500 font-extrabold text-xs uppercase mb-1">🥉 Bronze Award</div>
+                      <div className="w-14 h-14 mx-auto mb-2 rounded-2xl border-2 border-amber-700 overflow-hidden bg-amber-950 flex items-center justify-center shadow-md">
+                        {(top3 as any).photoUrl ? (
+                          <img src={(top3 as any).photoUrl} alt={top3.employeeName} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-amber-400 font-black text-lg">{(top3.employeeName || 'U').charAt(0)}</span>
+                        )}
+                      </div>
+                      <div className="text-amber-500 font-extrabold text-[11px] uppercase mb-0.5">🥉 Bronze Award</div>
                       <div className="text-white font-black text-sm truncate">{top3.employeeName}</div>
                       <div className="text-[11px] text-slate-400 truncate">{top3.department} • {top3.designation}</div>
-                      <div className="mt-3 pt-2 border-t border-slate-700/60">
+                      <div className="mt-2 pt-2 border-t border-slate-700/60">
                         <span className="text-2xl font-black text-amber-400">{top3.finalScore}%</span>
                       </div>
                     </>
@@ -307,11 +328,11 @@ export default function FiveSTVDisplayBoard({
 
       </div>
 
-      {/* Bottom Slogan Ticker Bar */}
+      {/* Bottom Status Ticker Bar */}
       <div className="bg-[#111827] border-t border-slate-800 px-6 py-2 flex items-center justify-between text-xs text-slate-400 shrink-0">
-        <div className="flex items-center gap-2 text-amber-400 font-extrabold uppercase tracking-wider">
+        <div className="flex items-center gap-2 text-emerald-400 font-extrabold uppercase tracking-wider">
           <Sparkles className="w-4 h-4" />
-          <span>WORK SMARTER, NOT HARDER</span>
+          <span>OPERATIONAL EXCELLENCE & 5S CONTINUOUS DISCIPLINE</span>
         </div>
         <div className="text-slate-500 font-medium">
           Target Standard: 90%+ 5S Discipline • Auto-refreshes every audit cycle

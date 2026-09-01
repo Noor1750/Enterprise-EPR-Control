@@ -33,6 +33,7 @@ import BreakdownDepartmentMatrix from './breakdown/BreakdownDepartmentMatrix';
 import BreakdownQuickActionModal from './breakdown/BreakdownQuickActionModal';
 import { BreakdownCalculationModal } from './breakdown/BreakdownCalculationModal';
 import AdminDeleteConfirmModal from './common/AdminDeleteConfirmModal';
+import ActionModalNotification, { ActionModalProps } from './common/ActionModalNotification';
 import { 
   Wrench, AlertTriangle, Plus, Search, Filter, Download, 
   RefreshCw, CheckCircle, Clock, DollarSign, Shield, Eye, 
@@ -87,6 +88,15 @@ export default function BreakdownLog({ spreadsheetId, userSecurityScope }: Break
   const [isCalcModalOpen, setIsCalcModalOpen] = useState(false);
   const [calcModalRecord, setCalcModalRecord] = useState<BreakdownRecord | null>(null);
   const [calcModalDetails, setCalcModalDetails] = useState<BreakdownCalculationDetails | null>(null);
+
+  // Modal Notification state
+  const [modalConfig, setModalConfig] = useState<ActionModalProps>({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+    onClose: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+  });
 
   // Search & Filtering
   const [searchQuery, setSearchQuery] = useState('');
@@ -364,6 +374,21 @@ export default function BreakdownLog({ spreadsheetId, userSecurityScope }: Break
       setAuditLogs(prev => [newAuditEntry, ...prev]);
       await appendRow(spreadsheetId, 'BreakdownAuditLog!A:J', [auditRow]);
     }
+
+    // Trigger feedback popup modal
+    setModalConfig({
+      isOpen: true,
+      type: 'success',
+      title: existingIndex >= 0 ? `Breakdown Ticket #${savedRecord.id} Updated` : `Breakdown Ticket #${savedRecord.id} Logged`,
+      message: `Machine "${savedRecord.machineName}" (${savedRecord.machineNo || 'N/A'}) has been successfully saved with status "${savedRecord.status}".`,
+      details: [
+        `Department: ${savedRecord.department}`,
+        `Problem: ${savedRecord.problemDescription}`,
+        `Hours Lost: ${savedRecord.hourLostFormatted || '0 Hours'}`,
+        `Production Stop: ${savedRecord.productionStop}`
+      ],
+      onClose: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+    });
   };
 
   // Quick 1-Click Status Change from Table/Kanban
@@ -422,6 +447,14 @@ export default function BreakdownLog({ spreadsheetId, userSecurityScope }: Break
       newAuditEntry.date, newAuditEntry.time, newAuditEntry.userId,
       newAuditEntry.userName, newAuditEntry.userRole, newAuditEntry.action, newAuditEntry.details
     ]]);
+
+    setModalConfig({
+      isOpen: true,
+      type: 'warning',
+      title: 'Breakdown Record Purged',
+      message: `Breakdown ticket #${recordToDelete.id} for machine ${recordToDelete.machineName} was successfully deleted.`,
+      onClose: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+    });
   };
 
   // Determine active dataset based on tab ('unsolved' vs 'completed')
@@ -1796,6 +1829,9 @@ export default function BreakdownLog({ spreadsheetId, userSecurityScope }: Break
         onConfirm={executeConfirmedBreakdownDelete}
         onClose={() => setDeleteRecordTarget(null)}
       />
+
+      {/* Unified Action Feedback Popup Modal */}
+      <ActionModalNotification {...modalConfig} />
     </div>
   );
 }

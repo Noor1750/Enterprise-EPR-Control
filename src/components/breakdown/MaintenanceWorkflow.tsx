@@ -17,6 +17,7 @@ import {
   HardDrive, AlertCircle, RefreshCw, Lock, Zap, Info
 } from 'lucide-react';
 import { BreakdownCalculationModal } from './BreakdownCalculationModal';
+import ActionModalNotification, { ActionModalProps } from '../common/ActionModalNotification';
 
 interface MaintenanceWorkflowProps {
   records: BreakdownRecord[];
@@ -108,6 +109,15 @@ export default function MaintenanceWorkflow({
   
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  // Unified Notification Modal State
+  const [modalConfig, setModalConfig] = useState<ActionModalProps>({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+    onClose: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+  });
 
   // Sync state when selectedRecord changes
   useEffect(() => {
@@ -305,6 +315,20 @@ export default function MaintenanceWorkflow({
 
       setSaveSuccessMsg(`Action saved successfully! Machine status: ${targetStatus}.`);
       
+      setModalConfig({
+        isOpen: true,
+        type: 'success',
+        title: `Maintenance Updated: ${updated.machineName}`,
+        message: `Breakdown ticket #${updated.id} was successfully updated to status "${targetStatus}".`,
+        details: [
+          `Attended By: ${attendByName || 'N/A'}`,
+          `Downtime: ${downtimeCalculated.formatted}`,
+          `Estimated Lost Production: ${downtimeCalculated.lostPcs.toLocaleString()} ${downtimeCalculated.standardUnit || 'PCS'}`,
+          `Total Cost: $${totalCost.toFixed(2)}`
+        ],
+        onClose: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+
       // Auto dismiss success message after 4s
       setTimeout(() => {
         setSaveSuccessMsg(null);
@@ -907,6 +931,9 @@ export default function MaintenanceWorkflow({
           calculationDetails={downtimeCalculated.calculationDetails}
         />
       )}
+
+      {/* Action Feedback Popup Modal */}
+      <ActionModalNotification {...modalConfig} />
 
     </div>
   );

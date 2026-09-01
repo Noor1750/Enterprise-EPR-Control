@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { NavigatorHealthMetric } from './types';
 import { getNavigatorIcon } from '../../lib/navigators';
+import { resolvePaletteForModule } from '../../lib/colorPalettes';
 
 interface NavigatorOverviewProps {
   navigatorMetrics: NavigatorHealthMetric[];
@@ -260,28 +261,48 @@ export default function NavigatorOverview({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {navigatorMetrics.map(nav => {
             const Icon = getNavigatorIcon(nav.iconName);
+            const pal = resolvePaletteForModule(nav.id);
             return (
               <div
                 key={nav.id}
                 onClick={() => setSelectedDrawerNav(nav)}
-                className="bg-gray-50/70 hover:bg-white p-4 rounded-xl border border-gray-200 hover:border-[#1ABB9C] hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
+                className="bg-white hover:bg-slate-50/90 p-4 rounded-xl border border-gray-200/90 hover:shadow-lg transition-all cursor-pointer flex flex-col justify-between group relative overflow-hidden"
               >
-                <div className="flex items-start justify-between gap-2 mb-3">
+                {/* Top Accent Strip */}
+                <div 
+                  className="absolute top-0 left-0 right-0 h-1"
+                  style={{ background: `linear-gradient(to right, ${pal.primaryHex}, ${pal.secondaryHex})` }}
+                />
+
+                <div className="flex items-start justify-between gap-2 mb-3 mt-1">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-700 group-hover:bg-[#1ABB9C] group-hover:text-white transition-colors shadow-2xs">
-                      <Icon className="w-4 h-4" />
+                    <div 
+                      className="w-9 h-9 rounded-xl border flex items-center justify-center transition-all duration-300 shadow-xs group-hover:scale-110 group-hover:shadow-md"
+                      style={{ 
+                        backgroundColor: pal.secondaryHex, 
+                        borderColor: `${pal.primaryHex}40`,
+                        color: pal.primaryHex
+                      }}
+                    >
+                      <Icon className="w-4 h-4 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-xs text-gray-900 group-hover:text-[#1ABB9C] transition-colors truncate max-w-[160px]">
+                      <h4 className="font-extrabold text-xs text-gray-900 transition-colors truncate max-w-[150px] group-hover:text-slate-950">
                         {nav.name}
                       </h4>
-                      <span className="text-[10px] text-gray-500">{nav.category}</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span 
+                          className="w-1.5 h-1.5 rounded-full shrink-0 transition-transform duration-300 group-hover:scale-150" 
+                          style={{ backgroundColor: pal.primaryHex }}
+                        />
+                        <span className="text-[10px] text-gray-500 font-medium">{nav.category}</span>
+                      </div>
                     </div>
                   </div>
                   {getHealthBadge(nav.health)}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 py-2 my-2 border-y border-gray-200/60 text-center text-xs">
+                <div className="grid grid-cols-3 gap-2 py-2 my-2 border-y border-gray-100 text-center text-xs">
                   <div>
                     <div className="text-[10px] text-gray-400 uppercase font-bold">Total</div>
                     <div className="font-black text-gray-800">{nav.totalItems}</div>
@@ -297,7 +318,7 @@ export default function NavigatorOverview({
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] pt-1">
-                  <span className="text-gray-500 truncate mr-2">
+                  <span className="text-gray-500 truncate mr-2 text-[10px]">
                     {nav.attentionReason || 'Normal operations'}
                   </span>
                   <button
@@ -305,7 +326,8 @@ export default function NavigatorOverview({
                       e.stopPropagation();
                       onNavigate?.(nav.id);
                     }}
-                    className="text-[#1ABB9C] font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform shrink-0"
+                    className="font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform shrink-0 px-2 py-0.5 rounded-md text-[11px]"
+                    style={{ color: pal.primaryHex }}
                   >
                     <span>Launch</span>
                     <ArrowRight className="w-3 h-3" />
@@ -318,85 +340,96 @@ export default function NavigatorOverview({
       )}
 
       {/* Quick Drawer / Modal on Click */}
-      {selectedDrawerNav && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95">
-            <div className="p-6">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-[#1ABB9C]/10 text-[#1ABB9C] flex items-center justify-center">
-                    {React.createElement(getNavigatorIcon(selectedDrawerNav.iconName), { className: 'w-5 h-5' })}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-sm">{selectedDrawerNav.name}</h3>
-                    <p className="text-xs text-gray-500">{selectedDrawerNav.category}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedDrawerNav(null)}
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+      {selectedDrawerNav && (() => {
+        const drawerPal = resolvePaletteForModule(selectedDrawerNav.id);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95">
+              <div className="p-6">
+                {/* Top Color Banner */}
+                <div 
+                  className="flex items-center justify-between p-3.5 rounded-xl mb-4 text-white shadow-xs"
+                  style={{ background: `linear-gradient(135deg, ${drawerPal.gradientFrom}, ${drawerPal.gradientTo})` }}
                 >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-3 mb-5">
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                  <span className="text-xs text-gray-600 font-medium">Health Status:</span>
-                  {getHealthBadge(selectedDrawerNav.health)}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="text-gray-400 text-[10px] uppercase font-bold">Total Workload</div>
-                    <div className="text-lg font-black text-gray-900 mt-0.5">{selectedDrawerNav.totalItems}</div>
+                  <div className="flex items-center gap-2.5">
+                    <div 
+                      className="w-9 h-9 rounded-lg flex items-center justify-center shadow-xs"
+                      style={{ backgroundColor: drawerPal.secondaryHex, color: drawerPal.primaryHex }}
+                    >
+                      {React.createElement(getNavigatorIcon(selectedDrawerNav.iconName), { className: 'w-5 h-5' })}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm leading-tight text-white">{selectedDrawerNav.name}</h3>
+                      <p className="text-[10px] text-white/80">{drawerPal.primaryName} • {drawerPal.secondaryName} Segment</p>
+                    </div>
                   </div>
-                  <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-                    <div className="text-indigo-600 text-[10px] uppercase font-bold">Active / Pending</div>
-                    <div className="text-lg font-black text-indigo-900 mt-0.5">{selectedDrawerNav.activeOrPending}</div>
-                  </div>
-                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-                    <div className="text-emerald-600 text-[10px] uppercase font-bold">Closed / Settled</div>
-                    <div className="text-lg font-black text-emerald-900 mt-0.5">{selectedDrawerNav.completedOrSettled}</div>
-                  </div>
-                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
-                    <div className="text-amber-700 text-[10px] uppercase font-bold">Attention Req.</div>
-                    <div className="text-lg font-black text-amber-900 mt-0.5">{selectedDrawerNav.attentionCount}</div>
-                  </div>
+                  <button
+                    onClick={() => setSelectedDrawerNav(null)}
+                    className="p-1 text-white/80 hover:text-white rounded-lg hover:bg-white/20 transition"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                {selectedDrawerNav.attentionReason && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs">
-                    <strong>Notice:</strong> {selectedDrawerNav.attentionReason}
+                <div className="space-y-3 mb-5">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <span className="text-xs text-gray-600 font-medium">Health Status:</span>
+                    {getHealthBadge(selectedDrawerNav.health)}
                   </div>
-                )}
-              </div>
 
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedDrawerNav(null)}
-                  className="flex-1 px-4 py-2.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const navId = selectedDrawerNav.id;
-                    setSelectedDrawerNav(null);
-                    onNavigate?.(navId);
-                  }}
-                  className="flex-1 px-4 py-2.5 text-xs font-bold text-white bg-[#1ABB9C] hover:bg-[#16A085] rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2"
-                >
-                  <span>Open Full Navigator</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="text-gray-400 text-[10px] uppercase font-bold">Total Workload</div>
+                      <div className="text-lg font-black text-gray-900 mt-0.5">{selectedDrawerNav.totalItems}</div>
+                    </div>
+                    <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                      <div className="text-indigo-600 text-[10px] uppercase font-bold">Active / Pending</div>
+                      <div className="text-lg font-black text-indigo-900 mt-0.5">{selectedDrawerNav.activeOrPending}</div>
+                    </div>
+                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                      <div className="text-emerald-600 text-[10px] uppercase font-bold">Closed / Settled</div>
+                      <div className="text-lg font-black text-emerald-900 mt-0.5">{selectedDrawerNav.completedOrSettled}</div>
+                    </div>
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
+                      <div className="text-amber-700 text-[10px] uppercase font-bold">Attention Req.</div>
+                      <div className="text-lg font-black text-amber-900 mt-0.5">{selectedDrawerNav.attentionCount}</div>
+                    </div>
+                  </div>
+
+                  {selectedDrawerNav.attentionReason && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs">
+                      <strong>Notice:</strong> {selectedDrawerNav.attentionReason}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDrawerNav(null)}
+                    className="flex-1 px-4 py-2.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const navId = selectedDrawerNav.id;
+                      setSelectedDrawerNav(null);
+                      onNavigate?.(navId);
+                    }}
+                    className="flex-1 px-4 py-2.5 text-xs font-bold text-white rounded-xl shadow-xs transition-opacity hover:opacity-95 flex items-center justify-center gap-2"
+                    style={{ background: `linear-gradient(135deg, ${drawerPal.gradientFrom}, ${drawerPal.gradientTo})` }}
+                  >
+                    <span>Open Full Navigator</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

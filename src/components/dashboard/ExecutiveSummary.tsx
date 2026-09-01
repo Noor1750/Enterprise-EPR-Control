@@ -124,22 +124,22 @@ export default function ExecutiveSummary({
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               onClick={() => onNavigate?.('tasks')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-100/90 hover:bg-rose-200 text-rose-800 text-xs font-bold rounded-xl border border-rose-300 transition-colors shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-100/90 hover:bg-rose-200 text-rose-800 text-xs font-bold rounded-xl border border-rose-300 transition-colors shadow-xs cursor-pointer group"
             >
-              <AlertOctagon className="w-3.5 h-3.5 text-rose-600" />
+              <AlertOctagon className="w-3.5 h-3.5 text-rose-600 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
               <span>{taskStats.overdue} Overdue Tasks</span>
-              <ArrowRight className="w-3 h-3 text-rose-600" />
+              <ArrowRight className="w-3 h-3 text-rose-600 group-hover:translate-x-0.5 transition-transform" />
             </motion.button>
           ) : (
             <motion.button
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               onClick={() => onNavigate?.('tasks')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-colors shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-colors shadow-xs cursor-pointer group"
             >
-              <CheckSquare className="w-3.5 h-3.5 text-indigo-600" />
+              <CheckSquare className="w-3.5 h-3.5 text-indigo-600 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
               <span>{taskStats.completed}/{taskStats.total} Tasks Done</span>
-              <ArrowRight className="w-3 h-3 text-indigo-600" />
+              <ArrowRight className="w-3 h-3 text-indigo-600 group-hover:translate-x-0.5 transition-transform" />
             </motion.button>
           )}
 
@@ -148,11 +148,11 @@ export default function ExecutiveSummary({
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               onClick={() => onNavigate?.('leave')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100/90 hover:bg-amber-200 text-amber-900 text-xs font-bold rounded-xl border border-amber-300 transition-colors shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100/90 hover:bg-amber-200 text-amber-900 text-xs font-bold rounded-xl border border-amber-300 transition-colors shadow-xs cursor-pointer group"
             >
-              <Clock className="w-3.5 h-3.5 text-amber-700" />
+              <Clock className="w-3.5 h-3.5 text-amber-700 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
               <span>{pendingLeaves} Pending Leave</span>
-              <ArrowRight className="w-3 h-3 text-amber-700" />
+              <ArrowRight className="w-3 h-3 text-amber-700 group-hover:translate-x-0.5 transition-transform" />
             </motion.button>
           )}
 
@@ -161,11 +161,11 @@ export default function ExecutiveSummary({
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               onClick={() => onNavigate?.('breakdown')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-100/90 hover:bg-rose-200 text-rose-900 text-xs font-bold rounded-xl border border-rose-300 transition-colors shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-100/90 hover:bg-rose-200 text-rose-900 text-xs font-bold rounded-xl border border-rose-300 transition-colors shadow-xs cursor-pointer group"
             >
-              <Cpu className="w-3.5 h-3.5 text-rose-700" />
+              <Cpu className="w-3.5 h-3.5 text-rose-700 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
               <span>{breakdownStats.activeDownCount} Machine Down</span>
-              <ArrowRight className="w-3 h-3 text-rose-700" />
+              <ArrowRight className="w-3 h-3 text-rose-700 group-hover:translate-x-0.5 transition-transform" />
             </motion.button>
           )}
 
@@ -174,11 +174,11 @@ export default function ExecutiveSummary({
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               onClick={() => onNavigate?.('kpi')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-100/90 hover:bg-yellow-200 text-yellow-900 text-xs font-bold rounded-xl border border-yellow-300 transition-colors shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-100/90 hover:bg-yellow-200 text-yellow-900 text-xs font-bold rounded-xl border border-yellow-300 transition-colors shadow-xs cursor-pointer group"
             >
-              <Award className="w-3.5 h-3.5 text-yellow-700" />
+              <Award className="w-3.5 h-3.5 text-yellow-700 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
               <span>{kpiStats.belowTargetCount} Below Target</span>
-              <ArrowRight className="w-3 h-3 text-yellow-700" />
+              <ArrowRight className="w-3 h-3 text-yellow-700 group-hover:translate-x-0.5 transition-transform" />
             </motion.button>
           )}
         </div>

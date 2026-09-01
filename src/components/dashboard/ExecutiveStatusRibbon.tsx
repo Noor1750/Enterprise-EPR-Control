@@ -84,14 +84,14 @@ export default function ExecutiveStatusRibbon({ vitalSigns, onSelectVital }: Exe
               transition={{ duration: 0.3, delay: index * 0.04 }}
               whileHover={{ y: -3, transition: { duration: 0.15 } }}
               onClick={() => onSelectVital?.(item.id)}
-              className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer hover:shadow-md flex flex-col justify-between ${style.bg}`}
+              className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer hover:shadow-md flex flex-col justify-between group ${style.bg}`}
             >
               <div>
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600 truncate">
                     {item.label}
                   </span>
-                  <IconComponent className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                  <IconComponent className="w-3.5 h-3.5 text-gray-500 shrink-0 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
                 </div>
                 <div className="flex items-baseline justify-between gap-1">
                   <span className="text-lg font-black text-gray-900 tracking-tight">

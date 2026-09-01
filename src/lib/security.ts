@@ -73,7 +73,7 @@ export const ALL_SYSTEM_MODULES = [
   { id: 'machine', name: 'Machine Capacity', category: 'Production & Engineering' },
   { id: 'skills', name: 'Skill Matrix', category: 'Production & Engineering' },
   { id: 'breakdown', name: 'Breakdown Log', category: 'Production & Engineering' },
-  { id: 'kpi', name: 'Monthly KPI', category: 'Performance' },
+  { id: 'kpi', name: 'KPI Performance', category: 'Performance' },
   { id: 'fives', name: '5S & Visual Management', category: 'Quality & Operations' },
   { id: 'practices', name: 'Best Practices', category: 'Quality & Operations' },
   { id: 'reports', name: 'Reports & Export', category: 'Analytics' },

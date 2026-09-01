@@ -576,7 +576,7 @@ export default function Dashboard({
           title: `Performance Gap: ${k.employeeName} (${k.department})`,
           subtitle: `Achievement recorded at ${k.achievement}% against monthly plan`,
           priority: 'Medium',
-          module: 'Monthly KPI',
+          module: 'KPI Performance',
           targetTab: 'kpi',
           badge: `${k.achievement}%`,
           actionText: 'Review KPI'
@@ -654,7 +654,7 @@ export default function Dashboard({
       },
       {
         id: 'kpi',
-        name: 'Monthly KPI & Performance',
+        name: 'KPI Performance',
         category: 'Quality & HR',
         iconName: 'Target',
         totalItems: kpiStats.totalEvaluated,
@@ -852,6 +852,24 @@ export default function Dashboard({
       }
     });
     list.sort((a, b) => new Date(a[21]).getDate() - new Date(b[21]).getDate());
+    return list;
+  }, [activeEmployees]);
+
+  // Work Anniversaries list for current month
+  const currentMonthAnniversaries = useMemo(() => {
+    const today = new Date();
+    const list = activeEmployees.filter(e => {
+      if (!e[4]) return false;
+      try {
+        const joinDate = new Date(e[4]);
+        if (isNaN(joinDate.getTime())) return false;
+        const years = today.getFullYear() - joinDate.getFullYear();
+        return joinDate.getMonth() === today.getMonth() && years > 0;
+      } catch {
+        return false;
+      }
+    });
+    list.sort((a, b) => new Date(a[4]).getDate() - new Date(b[4]).getDate());
     return list;
   }, [activeEmployees]);
 
@@ -1054,6 +1072,56 @@ export default function Dashboard({
                           <div className="font-mono text-xs font-semibold text-rose-600">
                             {format(bday, 'dd MMM')}
                             {isTodayBday && ' 🎂'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Work Anniversaries */}
+              <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-5 md:p-6">
+                <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-500" />
+                    <h3 className="text-sm font-bold text-gray-900">
+                      Work Anniversaries ({format(new Date(), 'MMMM')})
+                    </h3>
+                  </div>
+                  <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    {currentMonthAnniversaries.length} Milestones
+                  </span>
+                </div>
+
+                {currentMonthAnniversaries.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-3 text-center">No work anniversaries this month.</p>
+                ) : (
+                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                    {currentMonthAnniversaries.map((e, idx) => {
+                      const joinDate = new Date(e[4]);
+                      const years = new Date().getFullYear() - joinDate.getFullYear();
+                      const isTodayAnniv = joinDate.getDate() === new Date().getDate();
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border text-xs transition-colors ${
+                            isTodayAnniv
+                              ? 'bg-amber-50 border-amber-200 text-amber-900 font-bold'
+                              : 'bg-gray-50 border-gray-100 text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            <div>
+                              <span className="font-bold text-gray-900">{e[1]}</span>
+                              <span className="text-gray-400 text-[10px] ml-1.5">({e[3]})</span>
+                            </div>
+                          </div>
+                          <div className="font-mono text-xs font-semibold text-amber-700 flex items-center gap-1">
+                            <span>{years} {years === 1 ? 'Year' : 'Years'}</span>
+                            <span className="text-gray-400 text-[10px]">({format(joinDate, 'dd MMM')})</span>
+                            {isTodayAnniv && ' 🌟'}
                           </div>
                         </div>
                       );

@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { User } from 'firebase/auth';
-import { getRange, appendRow, updateRowByPrimaryKey, deleteRowByPrimaryKey } from '../lib/sheets';
+import { getRange, appendRow, updateRowByPrimaryKey, deleteRowByPrimaryKey, stripHeaderRow } from '../lib/sheets';
 import { 
   Loader2, DollarSign, Edit2, Trash2, X, Plus, Calendar, 
   Building2, Users, Trophy, TrendingUp, Search, Filter, 
   Download, Sparkles, Lightbulb, BarChart3, 
   RotateCcw, Check, Award, Zap,
-  Briefcase, FileSpreadsheet, Layers, UserCheck, CheckSquare, PlusCircle
+  Briefcase, FileSpreadsheet, Layers, UserCheck, CheckSquare, PlusCircle, ChevronDown
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -84,17 +84,21 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
   const [formEmployeeId, setFormEmployeeId] = useState('');
   const [formEmployeeName, setFormEmployeeName] = useState('');
   const [formDesignation, setFormDesignation] = useState('');
+  const [isIndividualDropdownOpen, setIsIndividualDropdownOpen] = useState(false);
+  const [individualSearchQuery, setIndividualSearchQuery] = useState('');
   
   // Group Fields
   const [formGroupName, setFormGroupName] = useState('');
   const [formGroupLeadId, setFormGroupLeadId] = useState('');
   const [groupMembers, setGroupMembers] = useState<GroupMemberItem[]>([]);
   const [memberSearchInput, setMemberSearchInput] = useState('');
+  const [isGroupMemberDropdownOpen, setIsGroupMemberDropdownOpen] = useState(false);
 
   // Common Fields
   const [formDate, setFormDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [formDepartment, setFormDepartment] = useState('');
   const [formCategory, setFormCategory] = useState('Process Improvement');
+  const [formBeforeDetails, setFormBeforeDetails] = useState('');
   const [formDetails, setFormDetails] = useState('');
   const [formSavings, setFormSavings] = useState('');
   const [formIsRecurring, setFormIsRecurring] = useState(false);
@@ -113,8 +117,8 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
         getRange(spreadsheetId, 'BestPractices!A:Z').catch(() => []),
         getRange(spreadsheetId, 'Employees!A:Z').catch(() => []),
       ]);
-      setPractices(pRaw.length > 1 ? pRaw.slice(1) : []);
-      setEmployees(eRaw.length > 1 ? eRaw.slice(1) : []);
+      setPractices(stripHeaderRow(pRaw));
+      setEmployees(stripHeaderRow(eRaw));
     } catch (err) {
       console.error('Error loading best practices data:', err);
     } finally {
@@ -614,16 +618,44 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
   const topIndividual = employeeLeaderboard[0];
   const topGroup = groupLeaderboard[0];
 
+  // Filtered lists for searchable dropdowns
+  const filteredIndividualEmployees = useMemo(() => {
+    const q = individualSearchQuery.trim().toLowerCase();
+    if (!q) return authorizedEmployees;
+    return authorizedEmployees.filter(emp => {
+      const id = (emp[0] || '').toLowerCase();
+      const name = (emp[1] || '').toLowerCase();
+      const desig = (emp[2] || '').toLowerCase();
+      const dept = (emp[3] || '').toLowerCase();
+      return id.includes(q) || name.includes(q) || desig.includes(q) || dept.includes(q);
+    });
+  }, [authorizedEmployees, individualSearchQuery]);
+
+  const filteredGroupEmployees = useMemo(() => {
+    const q = memberSearchInput.trim().toLowerCase();
+    if (!q) return authorizedEmployees;
+    return authorizedEmployees.filter(emp => {
+      const id = (emp[0] || '').toLowerCase();
+      const name = (emp[1] || '').toLowerCase();
+      const desig = (emp[2] || '').toLowerCase();
+      const dept = (emp[3] || '').toLowerCase();
+      return id.includes(q) || name.includes(q) || desig.includes(q) || dept.includes(q);
+    });
+  }, [authorizedEmployees, memberSearchInput]);
+
   // --- FORM HANDLERS ---
   const handleIndividualSelect = (empId: string) => {
-    const matched = employeeMap.get(empId.trim());
+    const cleanId = empId.trim();
+    const matched = employeeMap.get(cleanId);
     if (matched) {
       setFormEmployeeId(matched.id);
       setFormEmployeeName(matched.name);
       setFormDesignation(matched.designation);
-      if (!formDepartment) setFormDepartment(matched.department);
+      if (!formDepartment || formDepartment === 'General') setFormDepartment(matched.department);
+      setIndividualSearchQuery('');
+      setIsIndividualDropdownOpen(false);
     } else {
-      setFormEmployeeId(empId);
+      setFormEmployeeId(cleanId);
     }
   };
 
@@ -634,22 +666,29 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
     if (groupMembers.some(m => m.id === cleanId)) {
       alert('This employee is already added to the group.');
       setMemberSearchInput('');
+      setIsGroupMemberDropdownOpen(false);
       return;
     }
 
     const matched = employeeMap.get(cleanId);
+    if (!matched) {
+      alert(`Employee ID "${cleanId}" was not found in the Employee Directory. Only employees listed in the Employee Directory can be added.`);
+      return;
+    }
+
     const newMember: GroupMemberItem = {
-      id: cleanId,
-      name: matched ? matched.name : cleanId,
-      department: matched?.department,
-      designation: matched?.designation
+      id: matched.id,
+      name: matched.name,
+      department: matched.department,
+      designation: matched.designation
     };
 
     setGroupMembers(prev => [...prev, newMember]);
-    if (!formDepartment && matched?.department) {
+    if ((!formDepartment || formDepartment === 'General') && matched.department) {
       setFormDepartment(matched.department);
     }
     setMemberSearchInput('');
+    setIsGroupMemberDropdownOpen(false);
   };
 
   const handleRemoveGroupMember = (empId: string) => {
@@ -678,6 +717,7 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
 
     setFormDate(format(new Date(), 'yyyy-MM-dd'));
     setFormCategory('Process Improvement');
+    setFormBeforeDetails('');
     setFormDetails('');
     setFormSavings('');
     
@@ -691,6 +731,7 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
 
     setFormDate(p[1] || format(new Date(), 'yyyy-MM-dd'));
     setFormDepartment(p[5] || '');
+    setFormBeforeDetails(p[11] || '');
     setFormDetails(p[6] || '');
     setFormSavings(p[7] || '');
     setFormIsRecurring((p[10] || '').trim().toLowerCase() === 'yes');
@@ -776,7 +817,8 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
           numSavings,
           typeCol,
           groupMembersJson,
-          formIsRecurring ? 'Yes' : 'No'
+          formIsRecurring ? 'Yes' : 'No',
+          formBeforeDetails
         ];
         await updateRowByPrimaryKey(spreadsheetId, 'BestPractices', editingId, updatedRow);
       } else {
@@ -792,9 +834,10 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
           numSavings,
           typeCol,
           groupMembersJson,
-          formIsRecurring ? 'Yes' : 'No'
+          formIsRecurring ? 'Yes' : 'No',
+          formBeforeDetails
         ];
-        await appendRow(spreadsheetId, 'BestPractices!A:K', [newRow]);
+        await appendRow(spreadsheetId, 'BestPractices!A:L', [newRow]);
       }
 
       setShowModal(false);
@@ -829,7 +872,7 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
   };
 
   const handleExportCSV = () => {
-    const headers = ['ID', 'Date', 'Contributor Type', 'Employee ID / Group IDs', 'Contributor / Group Name', 'Designation / Info', 'Department', 'Innovation Details', 'Savings (USD)', 'Team Members'];
+    const headers = ['ID', 'Date', 'Contributor Type', 'Employee ID / Group IDs', 'Contributor / Group Name', 'Designation / Info', 'Department', 'Before Baseline Data', 'Innovation Details', 'Savings (USD)', 'Team Members'];
     const rows = filteredPractices.map(p => {
       const type = getRowContributorType(p);
       const members = getRowGroupMembers(p).map(m => `${m.id}: ${m.name}`).join('; ');
@@ -841,6 +884,7 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
         `"${(p[3] || '').replace(/"/g, '""')}"`,
         `"${(p[4] || '').replace(/"/g, '""')}"`,
         `"${(p[5] || '').replace(/"/g, '""')}"`,
+        `"${(p[11] || '').replace(/"/g, '""')}"`,
         `"${(p[6] || '').replace(/"/g, '""')}"`,
         p[7] || '0',
         `"${members.replace(/"/g, '""')}"`
@@ -1374,8 +1418,25 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
                         </td>
 
                         <td className="px-5 py-4 align-top">
-                          <div className="text-gray-800 text-xs font-normal leading-relaxed whitespace-pre-wrap max-w-lg">
-                            {p[6] || 'No description provided.'}
+                          <div className="space-y-2 max-w-lg">
+                            {p[11] && p[11].trim() && (
+                              <div className="bg-amber-50/70 border border-amber-200/90 rounded-lg p-2 text-[11px] text-amber-950">
+                                <span className="font-bold text-amber-800 uppercase tracking-wider block mb-0.5 text-[10px] flex items-center gap-1">
+                                  <RotateCcw className="w-3 h-3 text-amber-600 inline" /> Before (Baseline State):
+                                </span>
+                                <div className="leading-relaxed whitespace-pre-wrap text-amber-900 font-medium">
+                                  {p[11]}
+                                </div>
+                              </div>
+                            )}
+                            <div className="text-gray-800 text-xs font-normal leading-relaxed whitespace-pre-wrap">
+                              {p[11] && p[11].trim() && (
+                                <span className="font-bold text-blue-800 uppercase tracking-wider block mb-0.5 text-[10px] flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3 text-blue-600 inline" /> Innovation / Continuous Improvement:
+                                </span>
+                              )}
+                              {p[6] || 'No description provided.'}
+                            </div>
                           </div>
                         </td>
 
@@ -1919,9 +1980,9 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
 
       {/* MODAL: LOG / EDIT BEST PRACTICE (SUPPORTING INDIVIDUAL EMPLOYEE & GROUP OPTIONS) */}
       {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-gradient-to-r from-[#2A3F54] to-[#337AB7] px-6 py-4 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 md:p-6">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-gradient-to-r from-[#2A3F54] to-[#337AB7] px-5 sm:px-6 py-3.5 sm:py-4 text-white flex items-center justify-between shrink-0 shadow-xs">
               <div>
                 <h3 className="font-bold text-base flex items-center gap-2">
                   <Lightbulb className="w-5 h-5 text-amber-300" />
@@ -1933,13 +1994,13 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                className="text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
               {/* CONTRIBUTOR TYPE SELECTOR (2 OPTIONS: INDIVIDUAL EMPLOYEES & GROUP) */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
@@ -2027,23 +2088,109 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">
-                      Search or Pick Employee ID *
-                    </label>
-                    <input
-                      type="text"
-                      list="modal-emp-directory-list"
-                      required
-                      placeholder="Type ID (e.g. EMP001) or Name..."
-                      value={formEmployeeId}
-                      onChange={e => handleIndividualSelect(e.target.value)}
-                      className="w-full text-xs border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
-                    />
-                    <datalist id="modal-emp-directory-list">
-                      {authorizedEmployees.map((emp, idx) => (
-                        <option key={`${emp[0]}-${idx}`} value={emp[0]}>{emp[0]} - {emp[1]} ({emp[3]} • {emp[2]})</option>
-                      ))}
-                    </datalist>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-gray-700 uppercase">
+                        Search or Pick Employee ID *
+                      </label>
+                      <span className="text-[10px] text-gray-500 font-medium">
+                        {authorizedEmployees.length} Directory Staff
+                      </span>
+                    </div>
+
+                    {/* Search & Pick Input with Dropdown Popover */}
+                    <div className="relative">
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative flex-1">
+                          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="text"
+                            required={!formEmployeeId}
+                            placeholder="Type ID (e.g. EMP001) or Name to filter..."
+                            value={individualSearchQuery || (formEmployeeId ? `${formEmployeeId} - ${formEmployeeName}` : '')}
+                            onFocus={() => setIsIndividualDropdownOpen(true)}
+                            onChange={e => {
+                              setIndividualSearchQuery(e.target.value);
+                              setIsIndividualDropdownOpen(true);
+                            }}
+                            className="w-full text-xs border border-gray-300 rounded-md pl-9 pr-8 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                          />
+                          {formEmployeeId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormEmployeeId('');
+                                setFormEmployeeName('');
+                                setFormDesignation('');
+                                setIndividualSearchQuery('');
+                                setIsIndividualDropdownOpen(true);
+                              }}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded cursor-pointer"
+                              title="Clear selection"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsIndividualDropdownOpen(prev => !prev)}
+                          className="px-2.5 py-2 border border-gray-300 rounded-md bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs flex items-center gap-1 transition cursor-pointer"
+                          title="Open employee directory dropdown"
+                        >
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isIndividualDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+
+                      {/* Popover Dropdown List of Directory Staff */}
+                      {isIndividualDropdownOpen && (
+                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-blue-200 rounded-lg shadow-xl max-h-60 overflow-y-auto divide-y divide-gray-100">
+                          <div className="p-2 bg-blue-50/80 border-b border-blue-100 flex items-center justify-between text-[11px] text-blue-900 font-semibold sticky top-0 bg-opacity-95 backdrop-blur-xs">
+                            <span>Select Directory Staff ({filteredIndividualEmployees.length} matching)</span>
+                            <button
+                              type="button"
+                              onClick={() => setIsIndividualDropdownOpen(false)}
+                              className="text-blue-600 hover:text-blue-800 text-[10px] font-bold cursor-pointer"
+                            >
+                              Done
+                            </button>
+                          </div>
+                          {filteredIndividualEmployees.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-gray-400">
+                              No matching employee found in directory.
+                            </div>
+                          ) : (
+                            filteredIndividualEmployees.map((emp, idx) => {
+                              const isSelected = formEmployeeId === emp[0];
+                              return (
+                                <button
+                                  key={`${emp[0]}-${idx}`}
+                                  type="button"
+                                  onClick={() => handleIndividualSelect(emp[0])}
+                                  className={`w-full text-left p-2.5 hover:bg-blue-50/80 transition flex items-center justify-between gap-2 cursor-pointer ${
+                                    isSelected ? 'bg-blue-50/80 font-bold' : ''
+                                  }`}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-xs font-bold text-gray-900 flex items-center gap-2">
+                                      <span className="font-mono text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded text-[10px]">
+                                        {emp[0]}
+                                      </span>
+                                      <span className="truncate">{emp[1]}</span>
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 mt-0.5 truncate">
+                                      {emp[3] || 'General'} • {emp[2] || 'Staff'}
+                                    </div>
+                                  </div>
+                                  {isSelected && (
+                                    <Check className="w-4 h-4 text-blue-600 shrink-0" />
+                                  )}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Auto-resolved Employee Card */}
@@ -2056,7 +2203,7 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="font-semibold text-blue-800 bg-blue-50 px-2 py-0.5 rounded text-[11px]">
+                        <span className="font-semibold text-blue-800 bg-blue-50 px-2 py-0.5 rounded text-[11px] border border-blue-200">
                           {formDepartment || 'Employee Directory Match'}
                         </span>
                       </div>
@@ -2085,40 +2232,115 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
                     />
                   </div>
 
-                  {/* Add Group Members from Employee Directory */}
+                  {/* Add Group Members from Employee Directory with Search and Dropdown */}
                   <div>
-                    <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">
-                      Add Team Members from Employee Directory *
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        list="modal-group-members-picker"
-                        placeholder="Search employee by ID or Name to add to group..."
-                        value={memberSearchInput}
-                        onChange={e => setMemberSearchInput(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddGroupMember(memberSearchInput);
-                          }
-                        }}
-                        className="flex-1 text-xs border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
-                      />
-                      <datalist id="modal-group-members-picker">
-                        {authorizedEmployees.map((emp, idx) => (
-                          <option key={`${emp[0]}-${idx}`} value={emp[0]}>{emp[0]} - {emp[1]} ({emp[3]})</option>
-                        ))}
-                      </datalist>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-gray-600 uppercase">
+                        Add Team Members from Employee Directory *
+                      </label>
+                      <span className="text-[10px] text-purple-600 font-medium">
+                        Only listed Directory IDs allowed
+                      </span>
+                    </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleAddGroupMember(memberSearchInput)}
-                        className="px-3 py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-md flex items-center gap-1 transition-colors"
-                      >
-                        <PlusCircle className="w-4 h-4" />
-                        Add
-                      </button>
+                    <div className="relative">
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Search employee by ID, Name, or Department..."
+                            value={memberSearchInput}
+                            onFocus={() => setIsGroupMemberDropdownOpen(true)}
+                            onChange={e => {
+                              setMemberSearchInput(e.target.value);
+                              setIsGroupMemberDropdownOpen(true);
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddGroupMember(memberSearchInput);
+                              }
+                            }}
+                            className="w-full text-xs border border-gray-300 rounded-md pl-9 pr-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsGroupMemberDropdownOpen(prev => !prev)}
+                          className="px-2.5 py-2 border border-gray-300 rounded-md bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs flex items-center gap-1 transition cursor-pointer"
+                          title="Open employee directory list"
+                        >
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isGroupMemberDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAddGroupMember(memberSearchInput)}
+                          className="px-3.5 py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <PlusCircle className="w-4 h-4" />
+                          Add
+                        </button>
+                      </div>
+
+                      {/* Popover Dropdown List of Directory Staff */}
+                      {isGroupMemberDropdownOpen && (
+                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-purple-200 rounded-lg shadow-xl max-h-60 overflow-y-auto divide-y divide-gray-100">
+                          <div className="p-2 bg-purple-50/80 border-b border-purple-100 flex items-center justify-between text-[11px] text-purple-900 font-semibold sticky top-0 bg-opacity-95 backdrop-blur-xs">
+                            <span>Select Directory Staff to Add ({filteredGroupEmployees.length} matching)</span>
+                            <button
+                              type="button"
+                              onClick={() => setIsGroupMemberDropdownOpen(false)}
+                              className="text-purple-600 hover:text-purple-800 text-[10px] font-bold cursor-pointer"
+                            >
+                              Done
+                            </button>
+                          </div>
+                          {filteredGroupEmployees.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-gray-400">
+                              No matching employee found in directory.
+                            </div>
+                          ) : (
+                            filteredGroupEmployees.map((emp, idx) => {
+                              const isAlreadyAdded = groupMembers.some(m => m.id === emp[0]);
+                              return (
+                                <button
+                                  key={`${emp[0]}-${idx}`}
+                                  type="button"
+                                  disabled={isAlreadyAdded}
+                                  onClick={() => handleAddGroupMember(emp[0])}
+                                  className={`w-full text-left p-2.5 hover:bg-purple-50/80 transition flex items-center justify-between gap-2 ${
+                                    isAlreadyAdded ? 'opacity-50 bg-gray-50 cursor-not-allowed' : 'cursor-pointer'
+                                  }`}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-xs font-bold text-gray-900 flex items-center gap-2">
+                                      <span className="font-mono text-purple-700 bg-purple-100/70 px-1.5 py-0.5 rounded text-[10px]">
+                                        {emp[0]}
+                                      </span>
+                                      <span className="truncate">{emp[1]}</span>
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 mt-0.5 truncate">
+                                      {emp[3] || 'General'} • {emp[2] || 'Staff'}
+                                    </div>
+                                  </div>
+                                  {isAlreadyAdded ? (
+                                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                      Added
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-purple-700 font-bold hover:underline flex items-center gap-0.5">
+                                      <Plus className="w-3 h-3" /> Select
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2139,7 +2361,7 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
                             <button
                               type="button"
                               onClick={() => handleRemoveGroupMember(m.id)}
-                              className="text-purple-400 hover:text-red-600 ml-1 p-0.5 rounded"
+                              className="text-purple-400 hover:text-red-600 ml-1 p-0.5 rounded cursor-pointer"
                             >
                               <X className="w-3 h-3" />
                             </button>
@@ -2191,27 +2413,49 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
                 <p className="text-[10px] text-gray-500 mt-1">If selected, the savings value will be carried over to future months automatically.</p>
               </div>
 
+              {/* BEFORE BASELINE DATA */}
+              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-amber-900 uppercase flex items-center gap-1.5">
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                    Before Baseline Data (Historical State)
+                  </label>
+                  <span className="text-[10px] text-amber-700 font-medium">Record historical conditions / baseline metric</span>
+                </div>
+                <textarea
+                  rows={3}
+                  value={formBeforeDetails}
+                  onChange={e => setFormBeforeDetails(e.target.value)}
+                  placeholder="Describe the previous baseline conditions, cycle time, scrap percentage, manual labor hours, or costs prior to this improvement (e.g. 12% scrap rate, 45 mins setup time, $4,500 monthly loss)..."
+                  className="w-full text-xs border border-amber-300/80 rounded-md p-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 leading-relaxed text-slate-800"
+                />
+              </div>
+
               {/* INNOVATION DETAILS */}
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                  Innovation / Continuous Improvement Details *
-                </label>
+              <div className="bg-blue-50/40 border border-blue-200 rounded-xl p-3.5 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-blue-900 uppercase flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    Innovation / Continuous Improvement Details *
+                  </label>
+                  <span className="text-[10px] text-blue-700 font-medium">Implemented countermeasure & verified results</span>
+                </div>
                 <textarea
                   required
                   rows={4}
                   value={formDetails}
                   onChange={e => setFormDetails(e.target.value)}
                   placeholder="Describe the problem identified, the solution or continuous improvement technique implemented, and how the cost reduction was measured..."
-                  className="w-full text-xs border border-gray-300 rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-blue-500 leading-relaxed"
+                  className="w-full text-xs border border-blue-300/80 rounded-md p-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 leading-relaxed text-slate-800"
                 />
               </div>
 
-              {/* ACTION BUTTONS */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+              {/* ACTION BUTTONS (STICKY & VISIBLE) */}
+              <div className="sticky bottom-0 bg-white/95 backdrop-blur-xs py-3 border-t border-gray-200 flex items-center justify-end gap-3 z-20">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -2219,7 +2463,7 @@ export default function BestPractices({ spreadsheetId, user, userSecurityScope }
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 bg-[#337AB7] hover:bg-[#286090] text-white text-xs font-bold rounded-md flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-50"
+                  className="px-5 py-2 bg-[#337AB7] hover:bg-[#286090] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>

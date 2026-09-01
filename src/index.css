@@ -1,26 +1,145 @@
 @import "tailwindcss";
 
-body {
-  background-color: #F7F7F7;
-  color: #73879C;
-  font-family: "Helvetica Neue", Roboto, Arial, "Droid Sans", sans-serif;
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    --font-heading: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  }
+
+  body {
+    background-color: #0F172A;
+    color: #1E293B;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+  }
+
+  input, select, textarea {
+    color: #0F172A;
+    font-family: var(--font-sans);
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #94A3B8;
+  }
 }
 
-input, select, textarea {
-  color: #73879C;
-}
-
-/* Custom scrollbar for sidebar to match Gentelella */
+/* Smart Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(100, 116, 139, 0.6);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+/* Glass & Smart UI Utility Styles */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.glass-panel-dark {
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.smart-card {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.smart-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.03);
+}
+
+/* Icon Animations on Mouse Hover */
+@keyframes icon-bounce-wiggle {
+  0% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.18) rotate(-9deg); }
+  50% { transform: scale(1.22) rotate(7deg); }
+  75% { transform: scale(1.15) rotate(-4deg); }
+  100% { transform: scale(1.16) rotate(0deg); }
+}
+
+@keyframes icon-pulse-spin {
+  0% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(180deg); }
+  100% { transform: scale(1.15) rotate(360deg); }
+}
+
+.group:hover .group-hover-icon-anim,
+.hover-icon-anim:hover {
+  animation: icon-bounce-wiggle 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.icon-spin-on-hover:hover,
+.group:hover .group-hover-icon-spin {
+  animation: icon-pulse-spin 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.icon-float-bounce {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
+}
+.group:hover .icon-float-bounce {
+  transform: translateY(-2px) scale(1.16);
+}
+
+.smart-glow-emerald {
+  box-shadow: 0 0 20px -3px rgba(16, 185, 129, 0.25);
+}
+
+.smart-glow-indigo {
+  box-shadow: 0 0 20px -3px rgba(99, 102, 241, 0.25);
+}
+
+/* Shimmer Animation */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-shimmer {
+  animation: shimmer-sweep 2.5s infinite linear;
+}
+
+/* Subtle Gradient Glow */
+@keyframes mesh-glow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.animate-mesh-glow {
+  animation: mesh-glow 6s infinite ease-in-out;
 }

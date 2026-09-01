@@ -210,8 +210,111 @@ export default function BreakdownDashboard({ records, machinesList, departmentsL
       .slice(0, 5);
   }, [filteredRecords]);
 
+  // Critical & Overdue Machines Alert Logic
+  const criticalOverdueAlerts = useMemo(() => {
+    const alerts: Array<{
+      id: string;
+      machineName: string;
+      machineNo: string;
+      department: string;
+      type: 'critical_stop' | 'overdue' | 'frequent_failure';
+      title: string;
+      desc: string;
+      status: string;
+    }> = [];
+
+    const now = new Date();
+    const todayStr = now.toISOString().substring(0, 10);
+
+    records.forEach(r => {
+      if (r.status !== 'Completed' && r.status !== 'Closed' && r.status !== 'Cancelled') {
+        const isStop = r.productionStop === 'Yes';
+        const isOverdue = r.date && r.date < todayStr;
+        
+        if (isStop) {
+          alerts.push({
+            id: r.id,
+            machineName: r.machineName || 'Unassigned Machine',
+            machineNo: r.machineNo || '',
+            department: r.department || '',
+            type: 'critical_stop',
+            title: `CRITICAL LINE STOP: ${r.machineName}`,
+            desc: `Production stopped since ${r.date} ${r.reportAt || ''}. Status: ${r.status}. Problem: ${r.problemDescription || 'Unspecified'}`,
+            status: r.status
+          });
+        } else if (isOverdue) {
+          alerts.push({
+            id: r.id,
+            machineName: r.machineName || 'Unassigned Machine',
+            machineNo: r.machineNo || '',
+            department: r.department || '',
+            type: 'overdue',
+            title: `OVERDUE BREAKDOWN TICKET #${r.id}`,
+            desc: `Reported on ${r.date} (${r.department}). Still unsolved (${r.status}). Requires immediate maintenance dispatch.`,
+            status: r.status
+          });
+        }
+      }
+    });
+
+    return alerts;
+  }, [records]);
+
   return (
     <div className="space-y-6">
+
+      {/* Critical & Overdue Maintenance Alert Banner */}
+      {criticalOverdueAlerts.length > 0 && (
+        <div className="bg-gradient-to-r from-rose-500 via-rose-600 to-amber-600 rounded-2xl p-4 text-white shadow-lg shadow-rose-500/10 border border-rose-400/30">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center space-x-2">
+              <div className="p-1.5 bg-white/20 backdrop-blur-md rounded-lg animate-pulse">
+                <AlertTriangle className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black tracking-wide uppercase flex items-center gap-2">
+                  <span>Maintenance Dashboard Alerts</span>
+                  <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                    {criticalOverdueAlerts.length} Critical Issue{criticalOverdueAlerts.length > 1 ? 's' : ''}
+                  </span>
+                </h3>
+                <p className="text-xs text-rose-100 font-medium">Overdue breakdown tickets and critical line-stop alerts requiring urgent engineering attention</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-3">
+            {criticalOverdueAlerts.slice(0, 6).map((alert) => (
+              <div 
+                key={alert.id} 
+                className="bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 rounded-xl p-3 text-xs transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-white tracking-wide truncate max-w-[180px]">
+                      {alert.machineName} {alert.machineNo ? `(${alert.machineNo})` : ''}
+                    </span>
+                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                      alert.type === 'critical_stop' 
+                        ? 'bg-rose-950 text-rose-200 border border-rose-700' 
+                        : 'bg-amber-950 text-amber-200 border border-amber-700'
+                    }`}>
+                      {alert.status}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-rose-100 line-clamp-2 leading-relaxed">
+                    {alert.desc}
+                  </p>
+                </div>
+                <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-white/80">
+                  <span>{alert.department || 'Production'}</span>
+                  <span className="font-mono font-bold">Ticket #{alert.id}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       
       {/* Filter Bar */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">

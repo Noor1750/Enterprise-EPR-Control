@@ -40,6 +40,17 @@ export interface EmployeeShiftState {
   overtimeRate: string;
   salary: string;
   
+  // Personal & Address Information
+  maritalStatus?: string;
+  nationalId?: string;
+  presentAddress?: string;
+  presentThana?: string;
+  presentDistrict?: string;
+  permanentAddress?: string;
+  permanentThana?: string;
+  permanentDistrict?: string;
+  education?: string;
+
   // Current Dynamic Shift Values for target week
   currentShift: ShiftType;
   nextWeekShift: ShiftType;
@@ -289,6 +300,17 @@ export function parseEmployeeShiftState(
   const rawStartingShift = (row[24] || '').trim();
   const rawRemarks = (row[25] || '').trim();
 
+  // Extended Personal & Address fields
+  const maritalStatus = (row[26] || '').trim();
+  const nationalId = (row[27] || '').trim();
+  const presentAddress = (row[28] || '').trim();
+  const presentThana = (row[29] || '').trim();
+  const presentDistrict = (row[30] || '').trim();
+  const permanentAddress = (row[31] || '').trim();
+  const permanentThana = (row[32] || '').trim();
+  const permanentDistrict = (row[33] || '').trim();
+  const education = (row[34] || '').trim();
+
   const shiftMode: ShiftMode = normalizeShiftMode(rawMode);
   
   // Starting shift fallback
@@ -336,6 +358,15 @@ export function parseEmployeeShiftState(
     volunteer,
     salary,
     overtimeRate,
+    maritalStatus,
+    nationalId,
+    presentAddress,
+    presentThana,
+    presentDistrict,
+    permanentAddress,
+    permanentThana,
+    permanentDistrict,
+    education,
     currentShift,
     nextWeekShift,
     shiftMode,

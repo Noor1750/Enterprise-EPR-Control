@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { DashboardDateFilter, DashboardExecutiveTab } from './types';
 import { UserSecurityScope } from '../../lib/security';
 import { getErpName } from '../../lib/appSettings';
+import { resolvePaletteForModule } from '../../lib/colorPalettes';
 
 interface DashboardHeaderProps {
   userSecurityScope?: UserSecurityScope;
@@ -101,30 +102,53 @@ export default function DashboardHeader({
     .substring(0, 2)
     .toUpperCase() || 'OP';
 
+  const palette = resolvePaletteForModule('dashboard');
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden mb-6 transition-all">
       {/* Top Cockpit Header Bar */}
-      <div className="bg-gradient-to-r from-slate-900 via-[#1E293B] to-[#0F172A] p-5 md:p-6 text-white">
+      <div 
+        className="p-5 md:p-6 text-white transition-colors duration-300"
+        style={{
+          background: `linear-gradient(135deg, ${palette.primaryHex} 0%, #111C30 50%, #0F172A 100%)`
+        }}
+      >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           {/* Brand & System Status */}
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-[#16A085] flex items-center justify-center shadow-lg shadow-emerald-900/30 text-white font-bold shrink-0 ring-4 ring-white/10">
+            <div 
+              className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg text-white font-bold shrink-0 ring-4 ring-white/10"
+              style={{
+                background: `linear-gradient(135deg, ${palette.primaryHex}, ${palette.secondaryHex})`,
+                boxShadow: palette.glowShadow
+              }}
+            >
               <Layers className="w-6 h-6 text-white" />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-md border border-emerald-500/30">
+                <span 
+                  className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md border"
+                  style={{
+                    backgroundColor: `${palette.secondaryHex}25`,
+                    color: palette.secondaryHex,
+                    borderColor: `${palette.secondaryHex}40`
+                  }}
+                >
                   {getErpName().toUpperCase()} Control Center
                 </span>
                 <div className="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-0.5 rounded-md border border-slate-700 text-[11px] text-slate-300 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span 
+                    className="w-2 h-2 rounded-full animate-pulse" 
+                    style={{ backgroundColor: palette.secondaryHex }}
+                  />
                   <span>Live Database: <strong>Connected</strong></span>
                 </div>
               </div>
               <h1 className="text-xl md:text-2xl font-black text-white tracking-tight flex items-center gap-2">
                 Operations & Management Control Center
               </h1>
-              <p className="text-slate-400 text-xs md:text-sm mt-0.5 leading-relaxed">
+              <p className="text-slate-300 text-xs md:text-sm mt-0.5 leading-relaxed">
                 Unified real-time operational telemetry across manufacturing lines, tasks, staffing, and compliance.
               </p>
             </div>
@@ -134,7 +158,12 @@ export default function DashboardHeader({
           <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 lg:self-center">
             {/* User Details Pill */}
             <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-700/80 rounded-xl p-2.5 px-3.5 backdrop-blur-sm">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white text-xs shadow-xs shrink-0">
+              <div 
+                className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-xs shadow-xs shrink-0"
+                style={{
+                  background: `linear-gradient(135deg, ${palette.primaryHex}, #263BAA)`
+                }}
+              >
                 {initials}
               </div>
               <div className="min-w-0">
@@ -149,9 +178,10 @@ export default function DashboardHeader({
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-slate-300 mt-0.5">
-                  <span className={`font-semibold ${
-                    userSecurityScope?.isAdmin ? 'text-rose-400' : 'text-emerald-400'
-                  }`}>
+                  <span 
+                    className="font-semibold"
+                    style={{ color: userSecurityScope?.isAdmin ? '#FB7185' : palette.secondaryHex }}
+                  >
                     {roleTitle}
                   </span>
                   <span className="text-slate-500">•</span>
@@ -164,20 +194,24 @@ export default function DashboardHeader({
             <div className="flex items-center gap-2">
               <button
                 onClick={onOpenBriefing}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-950/40 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer hover:opacity-90 active:scale-95 group"
+                style={{
+                  backgroundColor: palette.secondaryHex,
+                  color: palette.primaryHex
+                }}
                 title="Generate and print executive briefing report"
               >
-                <Printer className="w-3.5 h-3.5" />
-                <span className="whitespace-nowrap">Briefing Report</span>
+                <Printer className="w-3.5 h-3.5 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
+                <span className="whitespace-nowrap font-black">Briefing Report</span>
               </button>
 
               <button
                 onClick={onRefresh}
                 disabled={isRefreshing}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-bold rounded-xl transition-all shadow-xs disabled:opacity-50 active:scale-95 cursor-pointer"
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-bold rounded-xl transition-all shadow-xs disabled:opacity-50 active:scale-95 cursor-pointer group"
                 title="Synchronize live records from Google Sheets database"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : 'text-slate-400 group-hover:rotate-180 transition-transform duration-500'}`} style={isRefreshing ? { color: palette.secondaryHex } : undefined} />
                 <span>{isRefreshing ? 'Syncing...' : 'Sync'}</span>
               </button>
             </div>
@@ -185,13 +219,13 @@ export default function DashboardHeader({
         </div>
 
         {/* Live Clock & Last Updated Bar */}
-        <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+        <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300">
           <div className="flex items-center gap-2 font-mono text-[11px]">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
             <span>{currentTime || 'Synchronizing system clock...'}</span>
           </div>
-          <div className="text-[11px] font-medium text-slate-400">
-            Last Synced: <strong className="text-slate-200 font-mono">{format(lastUpdated, 'hh:mm:ss a')}</strong>
+          <div className="text-[11px] font-medium text-slate-300">
+            Last Synced: <strong className="font-mono text-white">{format(lastUpdated, 'hh:mm:ss a')}</strong>
           </div>
         </div>
       </div>
@@ -206,18 +240,24 @@ export default function DashboardHeader({
               <button
                 key={tab.id}
                 onClick={() => setActiveExecutiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all select-none cursor-pointer ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all select-none cursor-pointer group ${
                   isActive
-                    ? 'bg-slate-900 text-white shadow-sm ring-1 ring-slate-900/10'
+                    ? 'shadow-sm border'
                     : 'bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
                 }`}
+                style={isActive ? {
+                  backgroundColor: palette.primaryHex,
+                  color: palette.secondaryHex,
+                  borderColor: palette.primaryHex
+                } : undefined}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
+                <Icon className={`w-3.5 h-3.5 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim ${isActive ? '' : 'text-slate-400'}`} style={isActive ? { color: palette.secondaryHex } : undefined} />
                 <span>{tab.label}</span>
                 {tab.countBadge !== undefined && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    isActive ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
-                  }`}>
+                  <span 
+                    className="text-[10px] px-1.5 py-0.2 rounded-full font-black text-slate-900"
+                    style={{ backgroundColor: palette.secondaryHex }}
+                  >
                     {tab.countBadge}
                   </span>
                 )}

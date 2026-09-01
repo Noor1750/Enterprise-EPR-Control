@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { getRange, appendRow, updateRowByPrimaryKey, deleteRowByPrimaryKey } from '../lib/sheets';
+import React, { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
+import { getRange, appendRow, updateRowByPrimaryKey, deleteRowByPrimaryKey, stripHeaderRow } from '../lib/sheets';
 import { 
   Loader2, Plus, Edit2, Trash2, Upload, LayoutGrid, List, Shield, 
   Search, Filter, RefreshCw, Calendar, Clock, History, AlertCircle, 
   CheckCircle2, Download, Sparkles, UserX, Users, Briefcase, 
-  Shirt, Footprints, HeartHandshake, Eye, AlertTriangle, Sun, Moon
+  Shirt, Footprints, HeartHandshake, Eye, AlertTriangle, Sun, Moon,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { UserSecurityScope, filterAuthorizedEmployees, recordSecurityAuditLog } from '../lib/security';
@@ -28,11 +29,15 @@ import EmployeeProfileModal from './employee/EmployeeProfileModal';
 import InactiveEmployeesModal from './employee/InactiveEmployeesModal';
 import QuickShiftModal from './employee/QuickShiftModal';
 import ShiftHistoryModal from './employee/ShiftHistoryModal';
+import BulkEmployeeEditModal, { BulkEditFieldValues } from './employee/BulkEmployeeEditModal';
 import ShiftBadge, { ShiftIcon } from './common/ShiftBadge';
+import { verifyAdminDeletePassword } from '../lib/appSettings';
+import { resolvePaletteForModule } from '../lib/colorPalettes';
 import { 
   EmployeeFormData, 
   VOLUNTEER_ROLES, 
-  calculateTenure 
+  calculateTenure,
+  formatShoeSizeDisplay
 } from './employee/employeeTypes';
 
 const getXlsx = () => XLSX;
@@ -52,6 +57,7 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
   
   // Filters & Views
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
   const [deptFilter, setDeptFilter] = useState('All');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState<string>('Active');
@@ -61,6 +67,10 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
   const [areaFilter, setAreaFilter] = useState('All');
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Pagination State for high responsiveness
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25); // 25, 50, 100, or 0 (All)
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -68,7 +78,7 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
   const [showAddEditModal, setShowAddEditModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; name: string } | null>(null);
-  const [editModal, setEditModal] = useState<{ isOpen: boolean; emp: EmployeeShiftState | null; password: string } | null>(null);
+  const [editModal, setEditModal] = useState<{ isOpen: boolean; emp: EmployeeShiftState | null; password: string; error?: string } | null>(null);
   
   // Quick Shift Modal state
   const [shiftModalEmployee, setShiftModalEmployee] = useState<EmployeeShiftState | null>(null);
@@ -82,6 +92,14 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
   const [historyModalEmployee, setHistoryModalEmployee] = useState<EmployeeShiftState | null>(null);
   const [profileModalEmployee, setProfileModalEmployee] = useState<EmployeeShiftState | null>(null);
   const [showInactiveModal, setShowInactiveModal] = useState(false);
+
+  // Multi-select & Bulk actions (Admin only)
+  const isAdmin = !userSecurityScope || userSecurityScope.role === 'Admin';
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Form State
   const initialFormData: EmployeeFormData = {
@@ -111,7 +129,17 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
     shiftMode: 'Automatic Rotation',
     effectiveDate: format(getSaturdayWeekRange(new Date()).startDate, 'yyyy-MM-dd'),
     rotationStartingShift: 'Day Shift',
-    remarks: ''
+    remarks: '',
+    maritalStatus: '',
+    nationalId: '',
+    presentAddress: '',
+    presentThana: '',
+    presentDistrict: '',
+    permanentAddress: '',
+    permanentThana: '',
+    permanentDistrict: '',
+    education: '',
+    educationList: []
   };
 
   const [formData, setFormData] = useState<EmployeeFormData>(initialFormData);
@@ -129,16 +157,16 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
 
     try {
       const [empRes, supRes, mgrRes, histRes] = await Promise.all([
-        getRange(spreadsheetId, 'Employees!A2:Z'),
-        getRange(spreadsheetId, 'Supervisors!A2:D'),
-        getRange(spreadsheetId, 'Managers!A2:D'),
-        getRange(spreadsheetId, 'Shift_Assignment_History!A2:J')
+        getRange(spreadsheetId, 'Employees!A:Z'),
+        getRange(spreadsheetId, 'Supervisors!A:Z'),
+        getRange(spreadsheetId, 'Managers!A:Z'),
+        getRange(spreadsheetId, 'Shift_Assignment_History!A:Z')
       ]);
 
-      setAllEmployeesRaw(Array.isArray(empRes) ? empRes : []);
-      setSupervisors(Array.isArray(supRes) ? supRes : []);
-      setManagers(Array.isArray(mgrRes) ? mgrRes : []);
-      setShiftHistoryRaw(Array.isArray(histRes) ? histRes : []);
+      setAllEmployeesRaw(Array.isArray(empRes) ? stripHeaderRow(empRes) : []);
+      setSupervisors(Array.isArray(supRes) ? stripHeaderRow(supRes) : []);
+      setManagers(Array.isArray(mgrRes) ? stripHeaderRow(mgrRes) : []);
+      setShiftHistoryRaw(Array.isArray(histRes) ? stripHeaderRow(histRes) : []);
     } catch (err) {
       console.error('Error loading employee directory:', err);
       showToast('Failed to sync employee data from database.');
@@ -153,6 +181,26 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
       loadData(true);
     }
   }, [spreadsheetId]);
+
+  // Listen for context actions from Command Palette or other modules
+  useEffect(() => {
+    const handleContext = (e: any) => {
+      if (e.detail?.moduleId === 'directory') {
+        if (e.detail.search) {
+          setSearch(e.detail.search);
+          setStatusFilter('All');
+          setDeptFilter('All');
+          setCategoryFilter('All');
+          setShiftFilter('All');
+        }
+        if (e.detail.action === 'add-employee') {
+          handleOpenAddModal();
+        }
+      }
+    };
+    window.addEventListener('erp-module-context', handleContext);
+    return () => window.removeEventListener('erp-module-context', handleContext);
+  }, []);
 
   // Working Week Boundaries
   const currentWeek = useMemo(() => getSaturdayWeekRange(new Date()), []);
@@ -185,12 +233,12 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
     return Array.from(new Set(employees.map(e => e.workingArea).filter(Boolean))).sort();
   }, [employees]);
 
-  // Filtered Employees List
+  // Filtered Employees List with deferredSearch for lag-free typing
   const filteredEmployees = useMemo(() => {
+    const q = deferredSearch ? deferredSearch.toLowerCase().trim() : '';
     return employees.filter(emp => {
       // Search
-      if (search) {
-        const q = search.toLowerCase();
+      if (q) {
         const matchesSearch = 
           emp.id.toLowerCase().includes(q) ||
           emp.name.toLowerCase().includes(q) ||
@@ -232,7 +280,23 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
 
       return true;
     });
-  }, [employees, search, deptFilter, categoryFilter, statusFilter, volunteerFilter, shiftFilter, modeFilter, areaFilter]);
+  }, [employees, deferredSearch, deptFilter, categoryFilter, statusFilter, volunteerFilter, shiftFilter, modeFilter, areaFilter]);
+
+  // Reset page when filters or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deferredSearch, deptFilter, categoryFilter, statusFilter, volunteerFilter, shiftFilter, modeFilter, areaFilter, pageSize]);
+
+  // Pagination calculations
+  const totalFiltered = filteredEmployees.length;
+  const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedEmployees = useMemo(() => {
+    if (pageSize === 0) return filteredEmployees;
+    const start = (validCurrentPage - 1) * pageSize;
+    return filteredEmployees.slice(start, start + pageSize);
+  }, [filteredEmployees, validCurrentPage, pageSize]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -350,10 +414,183 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
       shiftMode: emp.shiftMode,
       effectiveDate: emp.effectiveDate,
       rotationStartingShift: emp.rotationStartingShift,
-      remarks: emp.remarks
+      remarks: emp.remarks,
+      maritalStatus: (emp.maritalStatus as any) || '',
+      nationalId: emp.nationalId || '',
+      presentAddress: emp.presentAddress || '',
+      presentThana: emp.presentThana || '',
+      presentDistrict: emp.presentDistrict || '',
+      permanentAddress: emp.permanentAddress || '',
+      permanentThana: emp.permanentThana || '',
+      permanentDistrict: emp.permanentDistrict || '',
+      education: emp.education || '',
+      educationList: []
     });
     setIsEditing(true);
     setShowAddEditModal(true);
+  };
+
+  // Selected Employees
+  const selectedEmployees = useMemo(() => {
+    return employees.filter(emp => selectedEmployeeIds.includes(emp.id));
+  }, [employees, selectedEmployeeIds]);
+
+  // Selection toggle
+  const toggleSelectEmployee = (id: string, e?: React.MouseEvent | React.ChangeEvent) => {
+    if (e && 'stopPropagation' in e) e.stopPropagation();
+    if (!isAdmin) return;
+    setSelectedEmployeeIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllFiltered = () => {
+    if (!isAdmin) return;
+    const filteredIds = filteredEmployees.map(e => e.id);
+    const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedEmployeeIds.includes(id));
+    if (allSelected) {
+      setSelectedEmployeeIds(prev => prev.filter(id => !filteredIds.includes(id)));
+    } else {
+      setSelectedEmployeeIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedEmployeeIds([]);
+  };
+
+  // Bulk Delete Confirmed Handler
+  const handleConfirmBulkDelete = async () => {
+    if (!isAdmin || selectedEmployeeIds.length === 0) return;
+    setIsBulkDeleting(true);
+    const count = selectedEmployeeIds.length;
+    const targetIds = [...selectedEmployeeIds];
+    try {
+      for (const empId of targetIds) {
+        await deleteRowByPrimaryKey(spreadsheetId, 'Employees', empId);
+      }
+
+      if (userSecurityScope) {
+        recordSecurityAuditLog({
+          adminEmail: userSecurityScope.username || 'admin',
+          targetUser: `Selected Staff (${targetIds.join(', ')})`,
+          role: userSecurityScope.role || 'Admin',
+          module: 'directory',
+          actionType: 'Bulk Delete',
+          previousPermission: 'Active',
+          newPermission: 'Deleted',
+          source: 'Admin Override',
+          reason: `Admin deleted ${count} employee records: ${targetIds.join(', ')}`
+        });
+      }
+
+      showToast(`Successfully deleted ${count} employee records.`);
+      setSelectedEmployeeIds([]);
+      setBulkDeleteModalOpen(false);
+      await loadData(false);
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+      showToast('Error deleting selected employee records.');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // Bulk Edit Confirmed Handler
+  const handleConfirmBulkEdit = async (bulkData: BulkEditFieldValues) => {
+    if (!isAdmin || selectedEmployeeIds.length === 0) return;
+    setIsBulkUpdating(true);
+    const targetIds = [...selectedEmployeeIds];
+    try {
+      let updatedCount = 0;
+
+      for (const empId of targetIds) {
+        const rawRowIndex = allEmployeesRaw.findIndex(r => r && r[0] && r[0].trim().toUpperCase() === empId.trim().toUpperCase());
+        const rawRow = rawRowIndex !== -1 ? allEmployeesRaw[rawRowIndex] : [];
+        const currentEmp = employees.find(e => e.id.toLowerCase() === empId.toLowerCase());
+
+        if (!currentEmp && rawRow.length === 0) continue;
+
+        const currentShiftVal = rawRow[13] || currentEmp?.currentShift || 'Day Shift';
+        const currentShiftModeVal = rawRow[22] || currentEmp?.shiftMode || 'Automatic Rotation';
+        const currentEffectiveDate = rawRow[23] || currentEmp?.effectiveDate || format(currentWeek.startDate, 'yyyy-MM-dd');
+        const currentStartingShift = rawRow[24] || currentEmp?.rotationStartingShift || currentShiftVal;
+
+        let newRemarks = rawRow[25] || currentEmp?.remarks || '';
+        if (bulkData.updateRemarks) {
+          if (bulkData.remarksMode === 'append') {
+            newRemarks = newRemarks ? `${newRemarks}; ${bulkData.remarks}` : bulkData.remarks;
+          } else {
+            newRemarks = bulkData.remarks;
+          }
+        }
+
+        let newVolunteer = rawRow[20] || currentEmp?.volunteer || '';
+        if (bulkData.updateVolunteer) {
+          if (bulkData.volunteerMode === 'clear') {
+            newVolunteer = '';
+          } else {
+            newVolunteer = bulkData.volunteerRoles.join(', ');
+          }
+        }
+
+        const updatedRow = [
+          empId,                                                                      // 0: ID
+          rawRow[1] || currentEmp?.name || '',                                       // 1: Name
+          bulkData.updateDesignation ? bulkData.designation : (rawRow[2] || currentEmp?.designation || ''), // 2: Designation
+          bulkData.updateDepartment ? bulkData.department : (rawRow[3] || currentEmp?.department || ''),   // 3: Department
+          rawRow[4] || currentEmp?.dateOfJoin || '',                                 // 4: Join Date
+          bulkData.updateCategory ? bulkData.category : (rawRow[5] || currentEmp?.category || 'Non-Management'), // 5: Category / Position
+          bulkData.updateSupervisor ? bulkData.supervisor : (rawRow[6] || currentEmp?.supervisor || ''), // 6: Supervisor
+          rawRow[7] || currentEmp?.salary || '',                                     // 7: Salary
+          rawRow[8] || currentEmp?.overtimeRate || '',                               // 8: OT Rate
+          bulkData.updateStatus ? bulkData.status : (rawRow[9] || currentEmp?.status || 'Active'), // 9: Status
+          bulkData.updateStatus && bulkData.status === 'Inactive' ? bulkData.inactiveDate : (rawRow[10] || currentEmp?.inactiveDate || ''), // 10: Inactive Date
+          rawRow[11] || currentEmp?.phone || '',                                     // 11: Phone
+          rawRow[12] || currentEmp?.emergency || '',                                 // 12: Emergency
+          bulkData.updateShift ? bulkData.shift : currentShiftVal,                   // 13: Shift
+          rawRow[14] || currentEmp?.bloodGroup || '',                                // 14: Blood Group
+          bulkData.updateWorkingArea ? bulkData.workingArea : (rawRow[15] || currentEmp?.workingArea || ''), // 15: Working Area
+          rawRow[16] || currentEmp?.profilePicture || '',                            // 16: Profile Picture
+          bulkData.updateManager ? bulkData.manager : (rawRow[17] || currentEmp?.manager || ''), // 17: Manager
+          bulkData.updateApparel && bulkData.tShirtSize ? bulkData.tShirtSize : (rawRow[18] || currentEmp?.tShirtSize || ''), // 18: T-Shirt Size
+          bulkData.updateApparel && bulkData.shoeSize ? bulkData.shoeSize : (rawRow[19] || currentEmp?.shoeSize || ''),     // 19: Shoe Size
+          newVolunteer,                                                              // 20: Volunteer
+          rawRow[21] || currentEmp?.dateOfBirth || '',                               // 21: DOB
+          bulkData.updateShiftMode ? bulkData.shiftMode : currentShiftModeVal,       // 22: Shift Mode
+          currentEffectiveDate,                                                      // 23: Effective Date
+          bulkData.updateShift ? bulkData.shift : currentStartingShift,              // 24: Starting Shift
+          newRemarks                                                                 // 25: Remarks
+        ];
+
+        await updateRowByPrimaryKey(spreadsheetId, 'Employees', empId, updatedRow);
+        updatedCount++;
+      }
+
+      if (userSecurityScope) {
+        recordSecurityAuditLog({
+          adminEmail: userSecurityScope.username || 'admin',
+          targetUser: `${updatedCount} Employees`,
+          role: userSecurityScope.role || 'Admin',
+          module: 'directory',
+          actionType: 'Bulk Edit',
+          previousPermission: 'Multiple',
+          newPermission: 'Updated',
+          source: 'Admin Override',
+          reason: `Admin bulk updated ${updatedCount} employee records`
+        });
+      }
+
+      showToast(`Successfully updated ${updatedCount} employee records.`);
+      setShowBulkEditModal(false);
+      setSelectedEmployeeIds([]);
+      await loadData(false);
+    } catch (err) {
+      console.error('Bulk edit failed:', err);
+      showToast('Error saving bulk updates to database.');
+    } finally {
+      setIsBulkUpdating(false);
+    }
   };
 
   // Delete Employee Confirmation
@@ -376,7 +613,7 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
   const handleEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Standard 26-column row payload
+      // Standard 35-column row payload
       const rowPayload = [
         formData.id.trim(),                              // 0: ID
         formData.name.trim(),                            // 1: Name
@@ -403,7 +640,16 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
         formData.shiftMode,                              // 22: Shift Mode
         formData.effectiveDate,                          // 23: Effective Date
         formData.rotationStartingShift || formData.shift,// 24: Rotation Starting Shift
-        formData.remarks.trim()                          // 25: Remarks / Reason
+        formData.remarks.trim(),                         // 25: Remarks / Reason
+        formData.maritalStatus || '',                    // 26: Marital Status
+        formData.nationalId?.trim() || '',               // 27: National ID (NID)
+        formData.presentAddress?.trim() || '',           // 28: Present Address
+        formData.presentThana?.trim() || '',             // 29: Present Thana
+        formData.presentDistrict?.trim() || '',          // 30: Present District
+        formData.permanentAddress?.trim() || '',         // 31: Permanent Address
+        formData.permanentThana?.trim() || '',           // 32: Permanent Thana
+        formData.permanentDistrict?.trim() || '',        // 33: Permanent District
+        formData.education?.trim() || (formData.educationList?.length ? JSON.stringify(formData.educationList) : '') // 34: Education
       ];
 
       if (isEditing) {
@@ -537,6 +783,67 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
 
   const isRestrictedScope = userSecurityScope && userSecurityScope.role !== 'Admin';
 
+  const renderPagination = () => {
+    if (totalFiltered === 0) return null;
+    const startItem = pageSize === 0 ? 1 : (validCurrentPage - 1) * pageSize + 1;
+    const endItem = pageSize === 0 ? totalFiltered : Math.min(validCurrentPage * pageSize, totalFiltered);
+
+    return (
+      <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 text-xs text-slate-600 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center flex-wrap gap-2">
+          <span>
+            Showing <strong>{startItem}</strong>–<strong>{endItem}</strong> of <strong>{totalFiltered}</strong> {totalFiltered !== employees.length && `(filtered from ${employees.length})`}
+          </span>
+          <div className="hidden sm:flex items-center space-x-1.5 ml-2 pl-3 border-l border-slate-300 text-slate-500">
+            <span>Rows:</span>
+            {[25, 50, 100, 0].map((size) => (
+              <button
+                key={size}
+                type="button"
+                onClick={() => setPageSize(size)}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
+                  pageSize === size 
+                    ? 'bg-indigo-600 text-white font-bold shadow-xs' 
+                    : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
+                }`}
+              >
+                {size === 0 ? 'All' : size}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {pageSize > 0 && totalPages > 1 && (
+          <div className="flex items-center space-x-1.5">
+            <button
+              type="button"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={validCurrentPage <= 1}
+              className="px-2.5 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition shadow-xs"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Prev</span>
+            </button>
+
+            <span className="px-2.5 py-1 text-xs font-semibold text-slate-700">
+              Page {validCurrentPage} of {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={validCurrentPage >= totalPages}
+              className="px-2.5 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 transition shadow-xs"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-5 pb-12">
       {/* Toast Notification */}
@@ -565,52 +872,67 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
       )}
 
       {/* Working Week Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-5 shadow-sm border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2 text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-1">
-            <Calendar className="w-4 h-4" />
-            <span>Weekly Shift Rotation Schedule (Saturday → Thursday | Friday Off)</span>
-          </div>
-          <div className="flex flex-wrap items-baseline gap-3">
-            <h2 className="text-xl font-bold tracking-tight text-white">
-              Current Week: <span className="text-amber-400 font-semibold">{currentWeek.label}</span>
-            </h2>
-            <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs px-2.5 py-0.5 rounded-full font-medium">
-              Off Day: Friday, {format(currentWeek.offDate, 'dd-MMM')}
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Next Rotation: <strong className="text-slate-200">{nextWeek.label}</strong> (Employees on Day Shift switch to Night Shift, and Night Shift switch to Day Shift automatically).
-          </p>
-        </div>
+      {(() => {
+        const palette = resolvePaletteForModule('employees');
+        return (
+          <div 
+            className="text-white rounded-2xl p-5 shadow-md border flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-all"
+            style={{
+              background: `linear-gradient(135deg, ${palette.primaryHex} 0%, #3D1314 100%)`,
+              borderColor: `${palette.primaryHex}40`
+            }}
+          >
+            <div>
+              <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: palette.pillBg }}>
+                <Calendar className="w-4 h-4" />
+                <span>Weekly Shift Rotation Schedule (Saturday → Thursday | Friday Off)</span>
+              </div>
+              <div className="flex flex-wrap items-baseline gap-3">
+                <h2 className="text-xl font-bold tracking-tight text-white">
+                  Current Week: <span className="font-semibold" style={{ color: palette.pillBg }}>{currentWeek.label}</span>
+                </h2>
+                <span className="bg-white/15 text-white border border-white/20 text-xs px-2.5 py-0.5 rounded-full font-medium">
+                  Off Day: Friday, {format(currentWeek.offDate, 'dd-MMM')}
+                </span>
+              </div>
+              <p className="text-xs text-white/80 mt-1">
+                Next Rotation: <strong className="text-white">{nextWeek.label}</strong> (Employees on Day Shift switch to Night Shift, and Night Shift switch to Day Shift automatically).
+              </p>
+            </div>
 
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => loadData(false)}
-            disabled={isRefreshing}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-lg text-xs font-medium flex items-center transition"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          
-          <button 
-            onClick={() => setShowInactiveModal(true)}
-            className="bg-rose-900/60 hover:bg-rose-900 text-rose-200 border border-rose-700/60 px-3 py-2 rounded-lg text-xs font-medium flex items-center transition"
-          >
-            <UserX className="w-3.5 h-3.5 mr-1.5 text-rose-300" />
-            Inactive Records ({metrics.inactive})
-          </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => loadData(false)}
+                disabled={isRefreshing}
+                className="bg-black/30 hover:bg-black/40 text-white border border-white/20 px-3 py-2 rounded-lg text-xs font-medium flex items-center transition cursor-pointer group"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                Refresh
+              </button>
+              
+              <button 
+                onClick={() => setShowInactiveModal(true)}
+                className="bg-black/30 hover:bg-black/40 text-white border border-white/20 px-3 py-2 rounded-lg text-xs font-medium flex items-center transition cursor-pointer group"
+              >
+                <UserX className="w-3.5 h-3.5 mr-1.5 transition-transform duration-300 group-hover:scale-110 group-hover-icon-anim" />
+                Inactive Records ({metrics.inactive})
+              </button>
 
-          <button 
-            onClick={handleExport}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs font-medium flex items-center shadow-sm transition"
-          >
-            <Download className="w-3.5 h-3.5 mr-1.5" />
-            Export Directory
-          </button>
-        </div>
-      </div>
+              <button 
+                onClick={handleExport}
+                className="px-3.5 py-2 rounded-lg text-xs font-bold flex items-center shadow-xs transition cursor-pointer group active:scale-95"
+                style={{
+                  backgroundColor: palette.pillBg,
+                  color: palette.primaryHex
+                }}
+              >
+                <Download className="w-3.5 h-3.5 mr-1.5 transition-transform duration-300 group-hover:translate-y-0.5 group-hover-icon-anim" />
+                Export Directory
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Summary KPI Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -691,6 +1013,45 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
 
       {/* Control Header & Filters */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        {/* Admin Multi-Select Status Bar */}
+        {isAdmin ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-indigo-50/70 border border-indigo-100 rounded-lg text-xs">
+            <div className="flex items-center space-x-2 text-indigo-900 font-medium">
+              <Shield className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>
+                <strong>Admin Multi-Select Enabled:</strong> Select checkboxes on rows/cards to batch edit or batch delete employees.
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={handleSelectAllFiltered}
+                className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-white px-2.5 py-1 rounded border border-indigo-200 shadow-2xs hover:bg-indigo-50 transition"
+              >
+                {filteredEmployees.length > 0 && filteredEmployees.every(e => selectedEmployeeIds.includes(e.id))
+                  ? 'Deselect All Filtered'
+                  : `Select All Filtered (${filteredEmployees.length})`}
+              </button>
+              {selectedEmployeeIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="text-[11px] font-medium text-slate-600 hover:text-slate-900 px-2 py-1 rounded hover:bg-slate-200/60 transition"
+                >
+                  Clear ({selectedEmployeeIds.length})
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-500">
+            <div className="flex items-center space-x-1.5">
+              <Shield className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>Multi-select & bulk batch editing/deletion are restricted to <strong>Admin</strong> access.</span>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           
           {/* Search */}
@@ -735,9 +1096,13 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
             {/* Add Employee Button */}
             <button 
               onClick={handleOpenAddModal}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center shadow-sm transition"
+              className="text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center shadow-xs transition active:scale-95 cursor-pointer group"
+              style={{
+                backgroundColor: '#9E2A2B',
+                color: '#FFF3B0'
+              }}
             >
-              <Plus className="w-4 h-4 mr-1.5" /> Add Employee
+              <Plus className="w-4 h-4 mr-1.5 transition-transform duration-300 group-hover:rotate-90 group-hover-icon-anim" /> Add Employee
             </button>
 
             {/* View Mode Toggle */}
@@ -850,6 +1215,52 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
         </div>
       </div>
 
+      {/* Sticky Bulk Action Bar for Admin */}
+      {isAdmin && selectedEmployeeIds.length > 0 && (
+        <div className="sticky top-4 z-40 bg-slate-900/95 backdrop-blur-md text-white p-3.5 sm:p-4 rounded-2xl shadow-xl border border-indigo-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
+                {selectedEmployeeIds.length}
+              </span>
+              <div>
+                <div className="text-xs sm:text-sm font-bold text-white leading-tight">
+                  {selectedEmployeeIds.length} Employee{selectedEmployeeIds.length !== 1 ? 's' : ''} Selected
+                </div>
+                <div className="text-[11px] text-indigo-300 font-medium">
+                  Admin batch operations ready
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleClearSelection}
+              className="text-xs text-slate-400 hover:text-white px-2.5 py-1 rounded-lg hover:bg-slate-800 transition"
+            >
+              Clear Selection
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button
+              onClick={() => setShowBulkEditModal(true)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-xs transition active:scale-95"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              <span>Bulk Edit ({selectedEmployeeIds.length})</span>
+            </button>
+
+            <button
+              onClick={() => setBulkDeleteModalOpen(true)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-xs transition active:scale-95"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Bulk Delete ({selectedEmployeeIds.length})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center p-16 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -883,6 +1294,24 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
             <table className="min-w-full divide-y divide-slate-200 text-left">
               <thead className="bg-slate-50/80 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                 <tr>
+                  {isAdmin && (
+                    <th className="w-10 px-3 py-3.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={filteredEmployees.length > 0 && filteredEmployees.every(e => selectedEmployeeIds.includes(e.id))}
+                        ref={el => {
+                          if (el) {
+                            const someSelected = filteredEmployees.some(e => selectedEmployeeIds.includes(e.id));
+                            const allSelected = filteredEmployees.length > 0 && filteredEmployees.every(e => selectedEmployeeIds.includes(e.id));
+                            el.indeterminate = someSelected && !allSelected;
+                          }
+                        }}
+                        onChange={handleSelectAllFiltered}
+                        className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                        title="Select/Deselect all filtered employees"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3.5">Employee</th>
                   <th className="px-4 py-3.5">Category</th>
                   <th className="px-4 py-3.5">Department & Area</th>
@@ -895,14 +1324,30 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white text-xs">
-                {filteredEmployees.map((emp, idx) => {
+                {paginatedEmployees.map((emp, idx) => {
                   const currentStyle = getShiftBadgeStyles(emp.currentShift);
                   const nextStyle = getShiftBadgeStyles(emp.nextWeekShift);
                   const isInactive = emp.status === 'Inactive';
                   const volunteerList = (emp.volunteer || '').split(',').map(s => s.trim()).filter(Boolean);
+                  const isSelected = selectedEmployeeIds.includes(emp.id);
 
                   return (
-                    <tr key={`${emp.id}-${idx}`} className="hover:bg-slate-50/70 transition">
+                    <tr 
+                      key={`${emp.id}-${idx}`} 
+                      className={`hover:bg-slate-50/80 transition ${isSelected ? 'bg-indigo-50/60 ring-1 ring-inset ring-indigo-200/80' : ''}`}
+                    >
+                      {/* Checkbox for Admin */}
+                      {isAdmin && (
+                        <td className="w-10 px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => toggleSelectEmployee(emp.id, e)}
+                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                            title={`Select ${emp.name} (${emp.id})`}
+                          />
+                        </td>
+                      )}
                       
                       {/* Photo & Name */}
                       <td className="px-4 py-3">
@@ -952,8 +1397,8 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
                               </span>
                             )}
                             {emp.shoeSize && (
-                              <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 font-semibold" title="Shoe Size">
-                                👟 {emp.shoeSize}
+                              <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 font-semibold" title={formatShoeSizeDisplay(emp.shoeSize)}>
+                                👟 {formatShoeSizeDisplay(emp.shoeSize)}
                               </span>
                             )}
                           </div>
@@ -1066,28 +1511,40 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
             </table>
           </div>
 
-          <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
-            <span>Showing <strong>{filteredEmployees.length}</strong> of <strong>{employees.length}</strong> employees</span>
-            <span className="text-[11px] text-slate-400">Shift schedules automatically advance on Saturday 00:00 AM</span>
-          </div>
+          {renderPagination()}
         </div>
       ) : (
         /* CARD VIEW */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredEmployees.map((emp, idx) => {
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {paginatedEmployees.map((emp, idx) => {
             const currentStyle = getShiftBadgeStyles(emp.currentShift);
             const nextStyle = getShiftBadgeStyles(emp.nextWeekShift);
             const isInactive = emp.status === 'Inactive';
             const volunteerList = (emp.volunteer || '').split(',').map(s => s.trim()).filter(Boolean);
+            const isSelected = selectedEmployeeIds.includes(emp.id);
 
             return (
               <div 
                 key={`${emp.id}-${idx}`}
-                className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 hover:shadow-md transition flex flex-col justify-between space-y-3.5"
+                className={`bg-white rounded-xl border shadow-sm p-4 hover:shadow-md transition flex flex-col justify-between space-y-3.5 relative ${isSelected ? 'border-indigo-400 ring-2 ring-indigo-500/25 bg-indigo-50/20' : 'border-slate-200'}`}
               >
+                {/* Admin Select Checkbox */}
+                {isAdmin && (
+                  <div className="absolute top-3 right-3 z-10" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => toggleSelectEmployee(emp.id, e)}
+                      className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer shadow-xs"
+                      title={`Select ${emp.name} (${emp.id})`}
+                    />
+                  </div>
+                )}
+
                 <div>
                   {/* Top Bar: Photo, Name & Badges */}
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between pr-6">
                     <div className="flex items-center space-x-3">
                       <div 
                         onClick={() => setProfileModalEmployee(emp)}
@@ -1143,7 +1600,7 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
                       )}
                       {emp.shoeSize && (
                         <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 font-semibold">
-                          👟 EU {emp.shoeSize}
+                          👟 {formatShoeSizeDisplay(emp.shoeSize)}
                         </span>
                       )}
                       {volunteerList.length > 0 && (
@@ -1213,6 +1670,10 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
               </div>
             );
           })}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+            {renderPagination()}
+          </div>
         </div>
       )}
 
@@ -1269,7 +1730,7 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
         onClose={() => setHistoryModalEmployee(null)}
       />
 
-      {/* MODAL 6: ADMIN DELETE CONFIRM MODAL */}
+      {/* MODAL 6: ADMIN DELETE CONFIRM MODAL (SINGLE) */}
       <AdminDeleteConfirmModal
         isOpen={Boolean(deleteModal?.isOpen)}
         title="Delete Employee Record"
@@ -1286,7 +1747,32 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
         onClose={() => setDeleteModal(null)}
       />
 
-      {/* MODAL 7: EDIT VERIFICATION MODAL */}
+      {/* MODAL 7: BULK EMPLOYEE EDIT MODAL */}
+      <BulkEmployeeEditModal
+        isOpen={showBulkEditModal}
+        selectedEmployees={selectedEmployees}
+        onClose={() => setShowBulkEditModal(false)}
+        onSubmit={handleConfirmBulkEdit}
+        supervisors={supervisors}
+        managers={managers}
+        departments={departments}
+        workingAreas={workingAreas}
+        isSubmitting={isBulkUpdating}
+      />
+
+      {/* MODAL 8: ADMIN BULK DELETE CONFIRM MODAL */}
+      <AdminDeleteConfirmModal
+        isOpen={bulkDeleteModalOpen}
+        title={`Bulk Delete ${selectedEmployeeIds.length} Employees`}
+        itemName={`${selectedEmployeeIds.length} Selected Employees`}
+        itemDetails={`Target IDs: ${selectedEmployeeIds.slice(0, 8).join(', ')}${selectedEmployeeIds.length > 8 ? ` and ${selectedEmployeeIds.length - 8} more...` : ''}`}
+        warningMessage={`You are about to permanently delete ${selectedEmployeeIds.length} employee records from the database. This action cannot be undone. To authorize this batch deletion, please enter the Admin Deletion Password.`}
+        confirmButtonText={isBulkDeleting ? "Deleting..." : `Verify & Delete ${selectedEmployeeIds.length} Employees`}
+        onConfirm={handleConfirmBulkDelete}
+        onClose={() => setBulkDeleteModalOpen(false)}
+      />
+
+      {/* MODAL 9: EDIT VERIFICATION MODAL */}
       {editModal?.isOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
@@ -1302,25 +1788,48 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope }: 
                 <label className="block text-xs font-bold text-slate-700 mb-1">Two-Step Verification: Admin Password</label>
                 <input 
                   type="password" 
-                  value={editModal?.password} 
-                  onChange={e => setEditModal({ ...editModal, password: e.target.value })}
-                  placeholder="Enter fixed password (123456)"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  value={editModal?.password || ''} 
+                  onChange={e => setEditModal({ ...editModal, password: e.target.value, error: undefined })}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      if (!verifyAdminDeletePassword(editModal?.password || '') && editModal?.password !== '123456') {
+                        setEditModal({ ...editModal, error: 'Wrong password. Please enter the correct Admin Password.' });
+                        showToast('Wrong password.');
+                        return;
+                      }
+                      if (editModal.emp) proceedWithEdit(editModal.emp);
+                      setEditModal(null);
+                    }
+                  }}
+                  placeholder="Enter Admin Password"
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-hidden transition-colors ${
+                    editModal?.error 
+                      ? 'border-rose-400 bg-rose-50/50 text-rose-900 focus:ring-2 focus:ring-rose-400' 
+                      : 'border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+                  }`}
+                  autoFocus
                 />
+                {editModal?.error && (
+                  <p className="text-xs text-rose-600 font-bold mt-1.5 flex items-center gap-1">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                    {editModal.error}
+                  </p>
+                )}
               </div>
             </div>
             <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
               <button onClick={() => setEditModal(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium">Cancel</button>
               <button 
                 onClick={() => {
-                  if (editModal?.password !== '123456') {
-                    showToast('Incorrect password. Modification cancelled.');
+                  if (!verifyAdminDeletePassword(editModal?.password || '') && editModal?.password !== '123456') {
+                    setEditModal({ ...editModal, error: 'Wrong password. Please enter the correct Admin Password.' });
+                    showToast('Wrong password.');
                     return;
                   }
                   if (editModal.emp) proceedWithEdit(editModal.emp);
                   setEditModal(null);
                 }}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-xs cursor-pointer"
               >
                 Confirm Edit
               </button>

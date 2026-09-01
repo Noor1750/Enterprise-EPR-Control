@@ -5,6 +5,7 @@ import {
   Target, Clock, Users, FileText, Settings, Shield, Sparkles
 } from 'lucide-react';
 import { UserSecurityScope } from '../../lib/security';
+import { resolvePaletteForModule } from '../../lib/colorPalettes';
 
 interface QuickActionsProps {
   userSecurityScope?: UserSecurityScope;
@@ -20,66 +21,50 @@ export default function QuickActions({ userSecurityScope, onNavigate }: QuickAct
       desc: 'Assign operational task',
       icon: CheckSquare,
       targetTab: 'tasks',
-      color: 'hover:border-indigo-400 hover:bg-indigo-50/60 text-indigo-700 hover:shadow-indigo-500/10',
-      iconBg: 'group-hover:bg-indigo-600 group-hover:text-white',
       featured: true
     },
     {
       label: 'Apply Leave',
       desc: 'Submit leave request',
       icon: Calendar,
-      targetTab: 'leave',
-      color: 'hover:border-teal-400 hover:bg-teal-50/60 text-teal-700',
-      iconBg: 'group-hover:bg-teal-600 group-hover:text-white'
+      targetTab: 'leave'
     },
     {
       label: 'Log Breakdown',
       desc: 'Report line stoppage',
       icon: AlertTriangle,
-      targetTab: 'breakdown',
-      color: 'hover:border-rose-400 hover:bg-rose-50/60 text-rose-700',
-      iconBg: 'group-hover:bg-rose-600 group-hover:text-white'
+      targetTab: 'breakdown'
     },
     ...(isAdminOrManager ? [
       {
         label: 'Register Machine',
         desc: 'Add plant machinery',
         icon: Wrench,
-        targetTab: 'machine',
-        color: 'hover:border-emerald-400 hover:bg-emerald-50/60 text-emerald-700',
-        iconBg: 'group-hover:bg-emerald-600 group-hover:text-white'
+        targetTab: 'machine'
       },
       {
         label: 'Enter Monthly KPI',
         desc: 'Record performance score',
         icon: Target,
-        targetTab: 'kpi',
-        color: 'hover:border-amber-400 hover:bg-amber-50/60 text-amber-700',
-        iconBg: 'group-hover:bg-amber-600 group-hover:text-white'
+        targetTab: 'kpi'
       },
       {
         label: 'Shift Assignments',
         desc: 'Weekly roster rotations',
         icon: Clock,
-        targetTab: 'shifts',
-        color: 'hover:border-purple-400 hover:bg-purple-50/60 text-purple-700',
-        iconBg: 'group-hover:bg-purple-600 group-hover:text-white'
+        targetTab: 'shifts'
       },
       {
         label: 'Employee Directory',
         desc: 'Personnel & rosters',
         icon: Users,
-        targetTab: 'directory',
-        color: 'hover:border-blue-400 hover:bg-blue-50/60 text-blue-700',
-        iconBg: 'group-hover:bg-blue-600 group-hover:text-white'
+        targetTab: 'directory'
       },
       {
         label: 'Executive Reports',
         desc: 'Export data & insights',
         icon: FileText,
-        targetTab: 'reports',
-        color: 'hover:border-slate-400 hover:bg-slate-50/60 text-slate-700',
-        iconBg: 'group-hover:bg-slate-700 group-hover:text-white'
+        targetTab: 'reports'
       }
     ] : [])
   ];
@@ -98,6 +83,7 @@ export default function QuickActions({ userSecurityScope, onNavigate }: QuickAct
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2.5">
         {actions.map((action, index) => {
           const Icon = action.icon;
+          const pal = resolvePaletteForModule(action.targetTab);
           return (
             <motion.button
               key={action.label}
@@ -107,18 +93,34 @@ export default function QuickActions({ userSecurityScope, onNavigate }: QuickAct
               whileHover={{ y: -3, scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => onNavigate?.(action.targetTab)}
-              className={`p-3 rounded-xl border border-gray-200/85 bg-white transition-all text-left flex flex-col justify-between group shadow-2xs hover:shadow-md cursor-pointer relative overflow-hidden ${action.color} ${
-                action.featured ? 'ring-1 ring-indigo-500/30' : ''
-              }`}
+              className="p-3 rounded-xl border border-gray-200/85 bg-white transition-all text-left flex flex-col justify-between group shadow-2xs hover:shadow-md cursor-pointer relative overflow-hidden"
+              style={{
+                borderColor: undefined
+              }}
             >
-              <div className={`w-7 h-7 rounded-lg bg-gray-50 border border-gray-200/60 flex items-center justify-center mb-2 text-current transition-all duration-200 ${action.iconBg}`}>
-                <Icon className="w-3.5 h-3.5" />
+              {/* Top Accent Strip */}
+              <div 
+                className="absolute top-0 inset-x-0 h-1"
+                style={{ background: `linear-gradient(to right, ${pal.primaryHex}, ${pal.secondaryHex})` }}
+              />
+
+              <div 
+                className="w-8 h-8 rounded-lg border flex items-center justify-center mb-2 transition-all duration-300 group-hover:scale-110 shadow-2xs"
+                style={{ 
+                  backgroundColor: pal.secondaryHex, 
+                  borderColor: `${pal.primaryHex}40`,
+                  color: pal.primaryHex
+                }}
+              >
+                <Icon className="w-4 h-4 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
               </div>
               <div>
-                <div className="text-xs font-bold text-gray-900 group-hover:text-current leading-tight flex items-center justify-between gap-1">
+                <div 
+                  className="text-xs font-extrabold text-gray-900 leading-tight flex items-center justify-between gap-1 transition-colors"
+                >
                   <span>{action.label}</span>
                 </div>
-                <div className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">
+                <div className="text-[10px] text-gray-400 mt-0.5 line-clamp-1 font-medium">
                   {action.desc}
                 </div>
               </div>

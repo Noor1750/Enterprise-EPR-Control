@@ -1,6 +1,12 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getAuth, 
+  initializeAuth,
+  browserPopupRedirectResolver,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  inMemoryPersistence,
   signInWithPopup, 
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -10,10 +16,7 @@ import {
   GoogleAuthProvider, 
   onAuthStateChanged, 
   User, 
-  setPersistence, 
-  browserLocalPersistence,
-  browserSessionPersistence,
-  inMemoryPersistence,
+  setPersistence,
   reload
 } from 'firebase/auth';
 import fallbackConfig from '../../firebase-applet-config.json';
@@ -27,23 +30,33 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || fallbackConfig.appId
 };
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Default session persistence configuration with fallback
+// Safe initialization with popup redirect resolver and multi-tiered persistence fallback
+// Prioritizing browserLocalPersistence avoids transient IndexedDB "Database is closing/hidden" errors in iframes and background tabs
+let authInstance;
 try {
-  setPersistence(auth, browserLocalPersistence).catch(() => {
-    setPersistence(auth, inMemoryPersistence).catch((err) => console.warn('Persistence fallback error:', err));
+  authInstance = initializeAuth(app, {
+    persistence: [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence, indexedDBLocalPersistence],
+    popupRedirectResolver: browserPopupRedirectResolver
   });
-} catch (err) {
-  console.warn('Initial persistence error:', err);
+} catch (_) {
+  try {
+    authInstance = getAuth(app);
+  } catch (err) {
+    console.warn('Fallback getAuth initialization:', err);
+    authInstance = getAuth(app);
+  }
 }
+
+export const auth = authInstance;
 
 const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email');
 googleProvider.addScope('https://www.googleapis.com/auth/userinfo.profile');
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = localStorage.getItem('erp_real_google_token') || null;
@@ -86,7 +99,7 @@ export const initAuth = (
 export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, googleProvider);
+    const result = await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     
     // In Firebase Auth, Google OAuth credential provides the Google Access Token for Google Drive/Sheets APIs

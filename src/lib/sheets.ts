@@ -383,9 +383,18 @@ export const STANDARD_SHIFTS: string[][] = [
   ['SHF-003', 'General', '09:00', '18:00', 'Active']
 ];
 
-// Local storage storage helper
+// High-speed In-Memory Cache for Local Database to prevent continuous blocking JSON.parse / localStorage calls
+const memoryDbCache = new Map<string, string[][]>();
+
+// Local storage storage helper with in-memory memoization
 function getLocalSheet(sheetName: string): string[][] {
   const cleanName = sheetName.split('!')[0].trim();
+  
+  // Fast memory hit
+  if (memoryDbCache.has(cleanName)) {
+    return memoryDbCache.get(cleanName)!;
+  }
+
   const stored = localStorage.getItem(`erp_db_${cleanName}`);
   if (stored) {
     try {
@@ -398,9 +407,11 @@ function getLocalSheet(sheetName: string): string[][] {
         );
         if (hasLegacy || parsed.length <= 1) {
           localStorage.setItem(`erp_db_Shifts`, JSON.stringify(STANDARD_SHIFTS));
+          memoryDbCache.set('Shifts', STANDARD_SHIFTS);
           return STANDARD_SHIFTS;
         }
       }
+      memoryDbCache.set(cleanName, parsed);
       return parsed;
     } catch {
       // Fallback
@@ -408,12 +419,38 @@ function getLocalSheet(sheetName: string): string[][] {
   }
   const initial = DEFAULT_LOCAL_DB[cleanName] || [];
   localStorage.setItem(`erp_db_${cleanName}`, JSON.stringify(initial));
+  memoryDbCache.set(cleanName, initial);
   return initial;
 }
 
 function setLocalSheet(sheetName: string, data: string[][]): void {
   const cleanName = sheetName.split('!')[0].trim();
-  localStorage.setItem(`erp_db_${cleanName}`, JSON.stringify(data));
+  memoryDbCache.set(cleanName, data);
+  try {
+    localStorage.setItem(`erp_db_${cleanName}`, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Local storage write warning:', e);
+  }
+}
+
+// Debounced event dispatching to avoid micro-task UI freezing during batch operations
+let dispatchTimeout: any = null;
+const pendingDispatchSheets = new Set<string>();
+
+function notifyDbUpdated(sheetName: string) {
+  pendingDispatchSheets.add(sheetName);
+  if (dispatchTimeout) clearTimeout(dispatchTimeout);
+  dispatchTimeout = setTimeout(() => {
+    try {
+      const sheets = Array.from(pendingDispatchSheets);
+      pendingDispatchSheets.clear();
+      sheets.forEach(name => {
+        window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName: name } }));
+      });
+    } catch (e) {
+      // Ignore event dispatch errors
+    }
+  }, 50);
 }
 
 function isLocalStorageDb(spreadsheetId: string | null, token?: string | null): boolean {
@@ -541,13 +578,63 @@ export function invalidateCache(spreadsheetId: string, sheetMatch?: string) {
   }
 }
 
+export function stripHeaderRow(raw: string[][]): string[][] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const first = raw[0];
+  if (!first || !Array.isArray(first)) return [];
+  const c0 = String(first[0] || '').trim().toLowerCase();
+  const c1 = String(first[1] || '').trim().toLowerCase();
+  const c2 = String(first[2] || '').trim().toLowerCase();
+  const c3 = String(first[3] || '').trim().toLowerCase();
+
+  const isHeader = 
+    c0 === 'id_no' || 
+    c0 === 'id' || 
+    c0 === 'employee_id' || 
+    c0 === 'emp_id' || 
+    c0 === 'id number' ||
+    c0 === 'username' || 
+    c0 === 'brand name' || 
+    c0 === 'bp_id' || 
+    c0 === 'shift_id' || 
+    c0 === 'assignment_id' || 
+    c0 === 'task_id' || 
+    c0 === 'leave_id' || 
+    c0 === 'log_id' || 
+    c0 === 'audit_id' || 
+    c0 === 'history_id' || 
+    c0 === 'breakdown_id' || 
+    c0 === 'type_id' ||
+    c0 === 'override_id' ||
+    c0 === 'key' ||
+    c0 === 'action_id' ||
+    c0 === 'winner_id' ||
+    c0 === 'assessment_id' ||
+    c1 === 'name' || 
+    c1 === 'employee_name' ||
+    c1 === 'shift_name' ||
+    c1 === 'holiday_name' ||
+    c1 === 'password_hash' ||
+    c2 === 'designation' ||
+    c3 === 'department';
+
+  if (isHeader) {
+    return raw.slice(1);
+  }
+  return raw;
+}
+
 export async function getRange(spreadsheetId: string, range: string): Promise<string[][]> {
   const token = await getAccessToken();
   const sheetName = range.split('!')[0].trim();
 
   // If local storage mode or mock token, read from local DB
   if (isLocalStorageDb(spreadsheetId, token)) {
-    return getLocalSheet(sheetName);
+    const data = getLocalSheet(sheetName);
+    if (range.includes('!A2') || range.includes('!A2:')) {
+      return stripHeaderRow(data);
+    }
+    return data;
   }
 
   const cacheKey = `${spreadsheetId}-${range}`;
@@ -571,26 +658,30 @@ export async function getRange(spreadsheetId: string, range: string): Promise<st
         rangeCache.delete(cacheKey);
         if (response.status === 401) {
           console.warn('Auth expired, using local cache fallback');
-          return getLocalSheet(sheetName);
+          const data = getLocalSheet(sheetName);
+          return (range.includes('!A2') || range.includes('!A2:')) ? stripHeaderRow(data) : data;
         }
         if (response.status === 404 || response.status === 403) {
           console.warn(`Spreadsheet ${spreadsheetId} inaccessible (${response.status}), falling back to local database.`);
-          return getLocalSheet(sheetName);
+          const data = getLocalSheet(sheetName);
+          return (range.includes('!A2') || range.includes('!A2:')) ? stripHeaderRow(data) : data;
         }
-        return getLocalSheet(sheetName);
+        const data = getLocalSheet(sheetName);
+        return (range.includes('!A2') || range.includes('!A2:')) ? stripHeaderRow(data) : data;
       }
 
       const data = await response.json();
       const result = data.values || [];
       rangeCache.set(cacheKey, { data: result, timestamp: Date.now() });
-      // Keep local store in sync
-      if (result.length > 0) {
+      // Keep local store in sync if full range with header
+      if (result.length > 0 && !range.includes('!A2') && !range.includes('!A2:')) {
         setLocalSheet(sheetName, result);
       }
       return result;
     } catch (err) {
       console.warn(`Fetch failed for ${range}, falling back to local database:`, err);
-      return getLocalSheet(sheetName);
+      const data = getLocalSheet(sheetName);
+      return (range.includes('!A2') || range.includes('!A2:')) ? stripHeaderRow(data) : data;
     }
   })();
 
@@ -608,12 +699,8 @@ export async function appendRow(spreadsheetId: string, range: string, values: st
   const updatedLocal = [...currentLocal, ...values];
   setLocalSheet(sheetName, updatedLocal);
 
-  // Notify any active listeners across the app
-  try {
-    window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName } }));
-  } catch (e) {
-    // Ignore event dispatch errors
-  }
+  // Notify any active listeners across the app efficiently
+  notifyDbUpdated(sheetName);
 
   if (isLocalStorageDb(spreadsheetId, token)) {
     return;
@@ -670,12 +757,8 @@ export async function updateRange(spreadsheetId: string, range: string, values: 
     }
   }
 
-  // Notify any active listeners across the app
-  try {
-    window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName } }));
-  } catch (e) {
-    // Ignore event dispatch errors
-  }
+  // Notify any active listeners across the app efficiently
+  notifyDbUpdated(sheetName);
 
   if (isLocalStorageDb(spreadsheetId, token)) {
     return;
@@ -717,12 +800,8 @@ export async function updateRowByPrimaryKey(spreadsheetId: string, sheetName: st
     setLocalSheet(sheetName, currentLocal);
   }
 
-  // Notify any active listeners across the app
-  try {
-    window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName } }));
-  } catch (e) {
-    // Ignore event dispatch errors
-  }
+  // Notify any active listeners across the app efficiently
+  notifyDbUpdated(sheetName);
 
   if (isLocalStorageDb(spreadsheetId, token)) {
     return;
@@ -755,12 +834,8 @@ export async function deleteRowByPrimaryKey(spreadsheetId: string, sheetName: st
   const filteredLocal = currentLocal.filter(row => String(row[0] || '').trim().toUpperCase() !== primaryKey.trim().toUpperCase());
   setLocalSheet(sheetName, filteredLocal);
 
-  // Notify any active listeners across the app
-  try {
-    window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName } }));
-  } catch (e) {
-    // Ignore event dispatch errors
-  }
+  // Notify any active listeners across the app efficiently
+  notifyDbUpdated(sheetName);
 
   if (isLocalStorageDb(spreadsheetId, token)) {
     return;
@@ -858,8 +933,47 @@ export async function ensureSheetExists(spreadsheetId: string, sheetName: string
 export const KPI_HEADERS = ['KPI_ID', 'Employee_ID', 'Employee_Name', 'Department', 'Month', 'Date', 'Plan', 'Achievement', 'Rating', 'Created_At', 'Updated_At'];
 export const KPI_PRIVACY_HEADERS = ['Employee_ID', 'Hidden_By', 'Hidden_At', 'Reason'];
 
+export const PERFORMANCE_EVALUATION_HEADERS = [
+  'Evaluation_ID',
+  'Employee_ID',
+  'Employee_Name',
+  'Designation',
+  'Department',
+  'Date_Joined',
+  'Year_Of_Service',
+  'Evaluation_Type',
+  'Period',
+  'Period_Key',
+  'Year',
+  'Evaluation_Date',
+  'Evaluated_By',
+  'Job_Knowledge',
+  'Quantity_Of_Output',
+  'Quality_Of_Work',
+  'Attendance_Commitment',
+  'Initiative_Improvement',
+  'Dependability',
+  'Attitude',
+  'Creativity_Analytical',
+  'Communication_Skills',
+  'Interpersonal_Teamwork',
+  'Total_Score',
+  'Average_Rating',
+  'Rating_Grade',
+  'Strengths',
+  'Areas_Of_Improvement',
+  'Recommendation',
+  'Comments',
+  'Created_At',
+  'Updated_At'
+];
+
 export async function ensureKpiSheet(spreadsheetId: string): Promise<void> {
   await ensureSheetExists(spreadsheetId, 'KPI', KPI_HEADERS);
+}
+
+export async function ensurePerformanceEvaluationSheet(spreadsheetId: string): Promise<void> {
+  await ensureSheetExists(spreadsheetId, 'Performance_Evaluations', PERFORMANCE_EVALUATION_HEADERS);
 }
 
 export async function ensureKpiPrivacySheet(spreadsheetId: string): Promise<void> {
@@ -921,5 +1035,53 @@ export async function toggleHiddenKpiEmployeeId(spreadsheetId: string, employeeI
   }
   await saveHiddenKpiEmployeeIds(spreadsheetId, updated, userEmail);
   return updated;
+}
+
+export function clearLocalDatabase(): void {
+  // Clear memory cache
+  memoryDbCache.clear();
+
+  // Clean tables to headers only, keeping master admin accounts and system configurations
+  const CLEAN_INITIAL_DB: Record<string, string[][]> = {};
+  
+  Object.keys(DEFAULT_LOCAL_DB).forEach(sheet => {
+    const table = DEFAULT_LOCAL_DB[sheet];
+    if (table && table.length > 0) {
+      if (sheet === 'Users') {
+        // Keep master admin user
+        CLEAN_INITIAL_DB[sheet] = [
+          table[0],
+          table[1] || ['smltrimsbd@gmail.com', 'Samia@628', 'Admin', 'Active', 'All', '', 'all', '', '', 'ADMIN-001', 'Admin (SML Trims BD)', 'all']
+        ];
+      } else if (sheet === 'Shifts' || sheet === 'HolidayTypes' || sheet === 'CalendarSettings') {
+        CLEAN_INITIAL_DB[sheet] = table;
+      } else {
+        // Keep only header row (0 mock records)
+        CLEAN_INITIAL_DB[sheet] = [table[0]];
+      }
+    }
+  });
+
+  // Remove existing localStorage keys
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('erp_db_') || key.startsWith('erp_hidden_kpi'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+
+    // Seed clean headers
+    Object.keys(CLEAN_INITIAL_DB).forEach(sheet => {
+      localStorage.setItem(`erp_db_${sheet}`, JSON.stringify(CLEAN_INITIAL_DB[sheet]));
+      memoryDbCache.set(sheet, CLEAN_INITIAL_DB[sheet]);
+    });
+
+    window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName: 'All' } }));
+  } catch (err) {
+    console.error('Error clearing database:', err);
+  }
 }
 

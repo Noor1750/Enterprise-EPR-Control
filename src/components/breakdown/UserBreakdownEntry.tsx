@@ -3,6 +3,8 @@ import { BreakdownRecord } from '../../types/breakdown';
 import { UserSecurityScope } from '../../lib/security';
 import SearchableSelect from '../common/SearchableSelect';
 import TimeSelectDropdown, { getCurrentTimeHHMM } from '../common/TimeSelectDropdown';
+import ActionModalNotification, { ActionModalProps } from '../common/ActionModalNotification';
+import { LABEL_PRINTING_BREAKDOWN_SUGGESTIONS } from './labelPrintingSuggestions';
 import { 
   AlertTriangle, Send, CheckCircle2, Clock, Sparkles, 
   Building2, HardDrive, User, FileText, CheckCircle, Info, RefreshCw
@@ -45,6 +47,15 @@ export default function UserBreakdownEntry({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Modal Notification state
+  const [modalConfig, setModalConfig] = useState<ActionModalProps>({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+    onClose: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+  });
 
   // Auto-set reporter from logged in user
   useEffect(() => {
@@ -293,6 +304,20 @@ export default function UserBreakdownEntry({
 
       setSubmitSuccess(`Breakdown ticket #${newRecord.id} successfully created and sent to Maintenance Queue.`);
       
+      setModalConfig({
+        isOpen: true,
+        type: 'success',
+        title: `Breakdown Ticket #${newRecord.id} Created`,
+        message: `Breakdown ticket for machine "${machineName}" (${machineNo}) has been successfully submitted to Maintenance.`,
+        details: [
+          `Department: ${department}`,
+          `Problem: ${problemDescription}`,
+          `Reported At: ${reportAt} by ${reporterName}`,
+          `Production Stop: ${productionStop}`
+        ],
+        onClose: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+
       // Reset form
       setProblemDescription('');
       setReportAt(getCurrentTimeHHMM());
@@ -509,30 +534,59 @@ export default function UserBreakdownEntry({
             <label className="block text-xs font-bold text-slate-700">
               5. Problem (Description of Problem) <span className="text-rose-500">*</span>
             </label>
-            <span className="text-[10px] text-slate-400">Click a chip below to auto-fill</span>
+            <span className="text-[11px] text-slate-400">Click a chip below to auto-fill or enter custom description</span>
           </div>
 
           <textarea
             value={problemDescription}
             onChange={(e) => setProblemDescription(e.target.value)}
             required
-            rows={3}
-            placeholder="Describe the exact fault symptom (e.g. RFID feeder sensor continuous blinking, motor making grinding noise, belt snapped, heater temperature not rising)..."
-            className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"
+            rows={2}
+            placeholder="Describe the exact fault symptom (e.g. UV lamp curing failure, web tension loss, rotary die cutter blunt, servo drive alarm)..."
+            className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none font-medium"
           />
 
-          {/* Quick Problem Chips */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {quickProblemSuggestions.map((symptom) => (
-              <button
-                type="button"
-                key={symptom}
-                onClick={() => setProblemDescription(prev => prev ? `${prev}. ${symptom}` : symptom)}
-                className="text-[11px] px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-800 border border-slate-200 rounded-lg transition-colors"
-              >
-                + {symptom}
-              </button>
-            ))}
+          {/* Quick Problem Chips by Label Printing Industry Category */}
+          <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                Label Printing Industry Quick Breakdown Suggestions:
+              </span>
+              <span className="text-slate-400 text-[10px]">Click any chip to add</span>
+            </div>
+
+            <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+              {LABEL_PRINTING_BREAKDOWN_SUGGESTIONS.map((cat, cIdx) => (
+                <div key={cIdx} className="space-y-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    {cat.category}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cat.symptoms.map((symptom, sIdx) => (
+                      <button
+                        type="button"
+                        key={sIdx}
+                        onClick={() => {
+                          if (!problemDescription.trim()) {
+                            setProblemDescription(symptom);
+                          } else if (!problemDescription.includes(symptom)) {
+                            setProblemDescription(prev => `${prev}; ${symptom}`);
+                          }
+                        }}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all text-left font-medium ${
+                          problemDescription.includes(symptom)
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-800 font-bold shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-indigo-50/60 hover:border-indigo-200 hover:text-indigo-900'
+                        }`}
+                      >
+                        + {symptom}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -718,6 +772,9 @@ export default function UserBreakdownEntry({
           </div>
         )}
       </div>
+
+      {/* Confirmation & Status Popup Notification Modal */}
+      <ActionModalNotification {...modalConfig} />
 
     </div>
   );

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Task } from '../../lib/taskEngine';
 import { KPIRecord } from '../kpi/types';
+import { resolvePaletteForModule } from '../../lib/colorPalettes';
 
 interface ModuleBreakdownsProps {
   tasks: Task[];
@@ -153,17 +154,24 @@ export default function ModuleBreakdowns({
             { id: 'breakdown', label: 'Breakdown Log', icon: AlertTriangle },
           ].map(tab => {
             const Icon = tab.icon;
+            const tabPal = resolvePaletteForModule(tab.id);
+            const isTabActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'bg-white text-gray-900 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap group ${
+                  isTabActive
+                    ? 'shadow-xs border'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
                 }`}
+                style={isTabActive ? {
+                  backgroundColor: tabPal.secondaryHex,
+                  color: tabPal.primaryHex,
+                  borderColor: `${tabPal.primaryHex}40`
+                } : undefined}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-3.5 h-3.5 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
                 <span>{tab.label}</span>
               </button>
             );

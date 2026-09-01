@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { User } from 'firebase/auth';
-import { getRange, appendRow, updateRowByPrimaryKey, STANDARD_SHIFTS } from '../lib/sheets';
+import { getRange, appendRow, updateRowByPrimaryKey, STANDARD_SHIFTS, stripHeaderRow } from '../lib/sheets';
 import { UserSecurityScope, filterAuthorizedEmployees } from '../lib/security';
 import { 
   Loader2, Briefcase, Search, Check, 
@@ -67,7 +67,9 @@ export default function ShiftAssignments({ spreadsheetId, user, userSecurityScop
   const [selectedDepartment, setSelectedDepartment] = useState<string>('All');
   const [machineSearchTerm, setMachineSearchTerm] = useState('');
   const [opSearchTerm, setOpSearchTerm] = useState('');
-  const [operatorFilterTab, setOperatorFilterTab] = useState<'all' | 'matching' | 'other'>('all');
+  const [opDeptFilter, setOpDeptFilter] = useState('All');
+  const [opSupervisorFilter, setOpSupervisorFilter] = useState('All');
+  const [operatorFilterTab, setOperatorFilterTab] = useState<'all' | 'matching' | 'other'>('matching');
   const [selectedRosterIds, setSelectedRosterIds] = useState<string[]>([]);
   const [expandedMachineId, setExpandedMachineId] = useState<string | null>(null);
 
@@ -106,16 +108,17 @@ export default function ShiftAssignments({ spreadsheetId, user, userSecurityScop
         getRange(spreadsheetId, 'ShiftHistory!A:Z').catch(() => [])
       ]);
       
-      let loadedShifts = shiftsRaw.length > 1 ? shiftsRaw.slice(1) : [];
-      if (loadedShifts.length === 0 || loadedShifts.some(s => s[1]?.toLowerCase().includes('day') || s[1]?.toLowerCase().includes('night'))) {
+      const cleanShifts = stripHeaderRow(shiftsRaw);
+      let loadedShifts = cleanShifts.length > 0 ? cleanShifts : STANDARD_SHIFTS.slice(1);
+      if (loadedShifts.some(s => s[1]?.toLowerCase().includes('day') || s[1]?.toLowerCase().includes('night'))) {
         loadedShifts = STANDARD_SHIFTS.slice(1);
       }
       
       setShifts(loadedShifts);
-      setAssignments(assignRaw.length > 1 ? assignRaw.slice(1) : []);
-      setMachines(machRaw.length > 1 ? machRaw.slice(1) : []);
-      setAllEmployeesRaw(empRaw.length > 1 ? empRaw.slice(1) : []);
-      setShiftHistoryRaw(histRaw.length > 1 ? histRaw.slice(1) : []);
+      setAssignments(stripHeaderRow(assignRaw));
+      setMachines(stripHeaderRow(machRaw));
+      setAllEmployeesRaw(stripHeaderRow(empRaw));
+      setShiftHistoryRaw(stripHeaderRow(histRaw));
 
       setSelectedShiftId(prev => {
         if (!prev || !loadedShifts.find(s => s[0] === prev)) {
@@ -467,8 +470,11 @@ export default function ShiftAssignments({ spreadsheetId, user, userSecurityScop
     
     const assignmentsMap = new Map<string, { machineName: string; assignmentId: string }>();
     activeAssignments
-      .filter(a => a[2] === selectedShiftId)
-      .forEach(a => assignmentsMap.set(a[6], { machineName: a[5], assignmentId: a[0] }));
+      .forEach(a => {
+        if (a[6]) {
+          assignmentsMap.set(a[6].trim(), { machineName: a[5] || a[4] || 'Assigned', assignmentId: a[0] });
+        }
+      });
 
     return activeEmps.map((emp, idx) => {
       const assignmentInfo = assignmentsMap.get(emp.id);
@@ -611,11 +617,35 @@ export default function ShiftAssignments({ spreadsheetId, user, userSecurityScop
     }
   };
 
+  // Available departments & supervisors for Assign Modal
+  const assignModalDepartments = useMemo(() => {
+    const depts = new Set<string>();
+    availableEmployees.forEach(({ emp }) => {
+      if (emp.department) depts.add(emp.department);
+    });
+    return Array.from(depts).sort();
+  }, [availableEmployees]);
+
+  const assignModalSupervisors = useMemo(() => {
+    const sups = new Set<string>();
+    availableEmployees.forEach(({ emp }) => {
+      if (emp.supervisor) sups.add(emp.supervisor);
+    });
+    return Array.from(sups).sort();
+  }, [availableEmployees]);
+
   // Filtered available operators in Assign Modal
   const filteredAvailableList = useMemo(() => {
     let list = availableEmployees.filter(e => !e.isAssigned);
     if (operatorFilterTab === 'matching') list = list.filter(e => e.isMatching);
     else if (operatorFilterTab === 'other') list = list.filter(e => !e.isMatching);
+
+    if (opDeptFilter !== 'All') {
+      list = list.filter(e => e.emp.department === opDeptFilter);
+    }
+    if (opSupervisorFilter !== 'All') {
+      list = list.filter(e => e.emp.supervisor === opSupervisorFilter);
+    }
 
     if (!opSearchTerm.trim()) return list;
     const term = opSearchTerm.toLowerCase();
@@ -623,9 +653,10 @@ export default function ShiftAssignments({ spreadsheetId, user, userSecurityScop
       emp.name.toLowerCase().includes(term) ||
       emp.id.toLowerCase().includes(term) ||
       emp.department.toLowerCase().includes(term) ||
-      emp.designation.toLowerCase().includes(term)
+      emp.designation.toLowerCase().includes(term) ||
+      (emp.supervisor && emp.supervisor.toLowerCase().includes(term))
     );
-  }, [availableEmployees, opSearchTerm, operatorFilterTab]);
+  }, [availableEmployees, opSearchTerm, operatorFilterTab, opDeptFilter, opSupervisorFilter]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -1410,28 +1441,52 @@ export default function ShiftAssignments({ spreadsheetId, user, userSecurityScop
               </button>
             </div>
 
-            {/* Operator List Search & Filter */}
-            <div className="space-y-3 text-xs">
+            {/* Operator List Search & Filters */}
+            <div className="space-y-2.5 text-xs">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input 
                   type="text"
-                  placeholder="Search available staff..."
+                  placeholder="Search by Employee ID (e.g. EMP001) or Name..."
                   value={opSearchTerm}
                   onChange={(e) => setOpSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-xs"
                 />
+              </div>
+
+              {/* Department & Supervisor Quick Filters */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Department Filter</label>
+                  <select
+                    value={opDeptFilter}
+                    onChange={(e) => setOpDeptFilter(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  >
+                    <option value="All">All Departments</option>
+                    {assignModalDepartments.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Supervisor Filter</label>
+                  <select
+                    value={opSupervisorFilter}
+                    onChange={(e) => setOpSupervisorFilter(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  >
+                    <option value="All">All Supervisors</option>
+                    {assignModalSupervisors.map(sup => (
+                      <option key={sup} value={sup}>{sup}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Filter Tabs */}
               <div className="flex space-x-1 border-b border-slate-100 pb-2">
-                <button
-                  type="button"
-                  onClick={() => setOperatorFilterTab('all')}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold ${operatorFilterTab === 'all' ? 'bg-indigo-100 text-indigo-800' : 'text-slate-600 hover:bg-slate-100'}`}
-                >
-                  All Available ({availableEmployees.filter(e => !e.isAssigned).length})
-                </button>
                 <button
                   type="button"
                   onClick={() => setOperatorFilterTab('matching')}
@@ -1439,37 +1494,57 @@ export default function ShiftAssignments({ spreadsheetId, user, userSecurityScop
                 >
                   Matching Shift ({availableEmployees.filter(e => !e.isAssigned && e.isMatching).length})
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setOperatorFilterTab('all')}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold ${operatorFilterTab === 'all' ? 'bg-indigo-100 text-indigo-800' : 'text-slate-600 hover:bg-slate-100'}`}
+                >
+                  All Available ({availableEmployees.filter(e => !e.isAssigned).length})
+                </button>
               </div>
 
               {/* Operator Selection List */}
               <div className="max-h-60 overflow-y-auto space-y-1.5 border border-slate-100 rounded-xl p-2 bg-slate-50">
-                {filteredAvailableList.map(({ emp, isMatching }) => {
-                  const isSelected = selectedAssignEmpIds.includes(emp.id);
-                  return (
-                    <div 
-                      key={emp.id}
-                      onClick={() => toggleAssignEmpSelection(emp.id)}
-                      className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition ${
-                        isSelected 
-                          ? 'bg-indigo-50 border-indigo-600 ring-1 ring-indigo-500' 
-                          : 'bg-white border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-bold text-slate-800">{emp.name}</div>
-                        <div className="text-[11px] text-slate-500">{emp.id} • {emp.department} • {emp.designation}</div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isMatching ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                          {emp.currentShift}
-                        </span>
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
-                          {isSelected && <Check className="w-3 h-3" />}
+                {filteredAvailableList.length === 0 ? (
+                  <div className="text-center py-6 text-slate-400 text-xs">
+                    No unassigned operators match the selected filters.
+                  </div>
+                ) : (
+                  filteredAvailableList.map(({ emp, isMatching }) => {
+                    const isSelected = selectedAssignEmpIds.includes(emp.id);
+                    return (
+                      <div 
+                        key={emp.id}
+                        onClick={() => toggleAssignEmpSelection(emp.id)}
+                        className={`p-2.5 rounded-lg border cursor-pointer flex items-center justify-between transition ${
+                          isSelected 
+                            ? 'bg-indigo-50 border-indigo-600 ring-1 ring-indigo-500' 
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <span className="font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded text-[10px]">
+                              {emp.id}
+                            </span>
+                            <span className="truncate">{emp.name}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+                            {emp.department} • {emp.designation} {emp.supervisor ? `• Sup: ${emp.supervisor}` : ''}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2 shrink-0">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isMatching ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                            {emp.currentShift}
+                          </span>
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
+                            {isSelected && <Check className="w-3 h-3" />}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 

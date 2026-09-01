@@ -56,7 +56,7 @@ export const AdminDeleteConfirmModal: React.FC<AdminDeleteConfirmModalProps> = (
 
     const isValid = verifyAdminDeletePassword(password);
     if (!isValid) {
-      setError('Incorrect Admin Deletion Password. Please verify the password set under Settings → ERP Settings.');
+      setError('Wrong password. Please enter the correct Admin Password.');
       inputRef.current?.focus();
       return;
     }

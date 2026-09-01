@@ -21,7 +21,44 @@ export const VOLUNTEER_ROLES: VolunteerRoleItem[] = [
 ];
 
 export const TSHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
-export const SHOE_SIZES = ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
+
+export interface ShoeSizeOption {
+  eu: string;
+  bd: string;
+  label: string;
+}
+
+export const SHOE_SIZE_MAPPINGS: ShoeSizeOption[] = [
+  { eu: '38', bd: '5', label: 'EU 38 (BD/UK 5)' },
+  { eu: '39', bd: '6', label: 'EU 39/40 (BD/UK 6)' },
+  { eu: '40', bd: '6', label: 'EU 40 (BD/UK 6)' },
+  { eu: '41', bd: '7', label: 'EU 41 (BD/UK 7)' },
+  { eu: '42', bd: '8', label: 'EU 42 (BD/UK 8)' },
+  { eu: '43', bd: '9', label: 'EU 43 (BD/UK 9)' },
+  { eu: '44', bd: '10', label: 'EU 44 (BD/UK 10)' },
+  { eu: '45', bd: '11', label: 'EU 45 (BD/UK 11)' },
+  { eu: '46', bd: '12', label: 'EU 46 (BD/UK 12)' },
+  { eu: '47', bd: '13', label: 'EU 47 (BD/UK 13)' },
+];
+
+export const SHOE_SIZES = ['38', '39', '40', '41', '42', '43', '44', '45', '46', '47'];
+
+export function formatShoeSizeDisplay(size: string): string {
+  if (!size) return '';
+  const clean = size.replace(/^EU\s*/i, '').trim();
+  const found = SHOE_SIZE_MAPPINGS.find(m => m.eu === clean || m.bd === clean);
+  if (found) {
+    return found.label;
+  }
+  return `EU ${clean}`;
+}
+
+export interface EducationalQualification {
+  degree: string;
+  institute: string;
+  passingYear: string;
+  result?: string;
+}
 
 export interface EmployeeFormData {
   id: string;
@@ -51,6 +88,24 @@ export interface EmployeeFormData {
   effectiveDate: string;
   rotationStartingShift: string;
   remarks: string;
+
+  // Personal Information
+  maritalStatus: 'Married' | 'Unmarried' | 'Single' | 'Other' | '';
+  nationalId: string;
+
+  // Present Address
+  presentAddress: string;
+  presentThana: string;
+  presentDistrict: string;
+
+  // Permanent Address
+  permanentAddress: string;
+  permanentThana: string;
+  permanentDistrict: string;
+
+  // Education
+  education: string;
+  educationList?: EducationalQualification[];
 }
 
 /**

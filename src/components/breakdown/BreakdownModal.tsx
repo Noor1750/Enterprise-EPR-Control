@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import SearchableSelect from '../common/SearchableSelect';
 import TimeSelectDropdown, { getCurrentTimeHHMM } from '../common/TimeSelectDropdown';
+import { LABEL_PRINTING_BREAKDOWN_SUGGESTIONS } from './labelPrintingSuggestions';
 import { BreakdownCalculationModal } from './BreakdownCalculationModal';
 import { 
   calculateResponseTime, 
@@ -764,20 +765,69 @@ export default function BreakdownModal({
                 </div>
               </div>
 
-              {/* 5. Problem Description */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  5. Problem (Description of Problem) <span className="text-rose-500">*</span>
-                </label>
+              {/* 5. Problem Description with Label Printing Quick Suggestions */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700">
+                    5. Problem (Description of Problem) <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">Select quick suggestion or type custom</span>
+                </div>
+
                 <textarea
                   disabled={isReadOnly || isNonMachineDept}
                   value={problemDescription}
                   onChange={(e) => setProblemDescription(e.target.value)}
                   required
                   rows={2}
-                  placeholder="Describe the exact breakdown symptom (e.g. Motor overheating, feeder sensor jamming, cutter blade alignment broken)..."
-                  className="w-full bg-white border border-slate-300 rounded-lg p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:bg-slate-100 resize-none"
+                  placeholder="Describe the exact breakdown symptom (e.g. UV lamp failure, web tension loss, rotary die cutter blunt)..."
+                  className="w-full bg-white border border-slate-300 rounded-lg p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:bg-slate-100 resize-none font-medium"
                 />
+
+                {/* Quick Suggestion Chips for Label Printing Industry */}
+                {!isReadOnly && !isNonMachineDept && (
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 space-y-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        Label Industry Quick Suggestions:
+                      </span>
+                      <span className="text-slate-400 text-[10px]">Click any item to insert</span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                      {LABEL_PRINTING_BREAKDOWN_SUGGESTIONS.map((cat, catIdx) => (
+                        <div key={catIdx} className="space-y-1">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            {cat.category}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {cat.symptoms.map((symptom, sIdx) => (
+                              <button
+                                key={sIdx}
+                                type="button"
+                                onClick={() => {
+                                  if (!problemDescription.trim()) {
+                                    setProblemDescription(symptom);
+                                  } else if (!problemDescription.includes(symptom)) {
+                                    setProblemDescription(prev => `${prev}; ${symptom}`);
+                                  }
+                                }}
+                                className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all text-left font-medium ${
+                                  problemDescription.includes(symptom)
+                                    ? 'bg-indigo-50 border-indigo-300 text-indigo-800 font-bold shadow-2xs'
+                                    : 'bg-white border-slate-200 text-slate-700 hover:bg-indigo-50/50 hover:border-indigo-200 hover:text-indigo-900'
+                                }`}
+                              >
+                                {symptom}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 6. Stop, 7. Report At, 8. Reporter */}

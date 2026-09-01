@@ -5,6 +5,7 @@ import {
   AlertTriangle, Clock, TrendingUp, TrendingDown, ArrowUpRight,
   ShieldCheck, AlertOctagon, CheckCircle2, ChevronRight, Briefcase, Sparkles
 } from 'lucide-react';
+import { resolvePaletteForModule } from '../../lib/colorPalettes';
 
 interface KPICardsProps {
   employeeCount: number;
@@ -219,6 +220,7 @@ export default function KPICards({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3.5">
         {cards.map((card, index) => {
           const Icon = card.icon;
+          const pal = resolvePaletteForModule(card.targetTab);
           return (
             <motion.div
               key={card.id}
@@ -233,18 +235,24 @@ export default function KPICards({
                   onNavigate?.(card.targetTab);
                 }
               }}
-              className={`bg-white rounded-2xl p-4 border border-gray-200/85 shadow-xs hover:shadow-lg transition-all duration-200 cursor-pointer flex flex-col justify-between group relative overflow-hidden ${card.hoverBorder} ${
-                card.isTaskFeatured ? 'ring-1 ring-indigo-500/30 shadow-indigo-500/5' : ''
-              }`}
+              className="bg-white rounded-2xl p-4 border border-gray-200/85 shadow-xs hover:shadow-lg transition-all duration-200 cursor-pointer flex flex-col justify-between group relative overflow-hidden"
             >
-              {/* Subtle top glow accent for task & featured cards */}
-              {card.isTaskFeatured && (
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600" />
-              )}
+              {/* Top Accent Strip */}
+              <div 
+                className="absolute top-0 inset-x-0 h-1"
+                style={{ background: `linear-gradient(to right, ${pal.primaryHex}, ${pal.secondaryHex})` }}
+              />
 
-              <div className="flex items-start justify-between gap-2 mb-2.5">
-                <div className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all duration-200 shrink-0 group-hover:scale-110 ${card.iconBg}`}>
-                  <Icon className="w-4 h-4" />
+              <div className="flex items-start justify-between gap-2 mb-2.5 mt-0.5">
+                <div 
+                  className="w-8 h-8 rounded-xl border flex items-center justify-center transition-all duration-300 shrink-0 group-hover:scale-110 group-hover:shadow-md shadow-2xs"
+                  style={{ 
+                    backgroundColor: pal.secondaryHex, 
+                    borderColor: `${pal.primaryHex}40`,
+                    color: pal.primaryHex
+                  }}
+                >
+                  <Icon className="w-4 h-4 transition-transform duration-300 group-hover:scale-125 group-hover-icon-anim" />
                 </div>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 transition-all ${
                   card.badgeType === 'danger'
@@ -266,7 +274,9 @@ export default function KPICards({
                     <Sparkles className="w-3 h-3 text-indigo-500 inline shrink-0" />
                   )}
                 </div>
-                <div className="text-xl font-black text-gray-900 tracking-tight mt-0.5 group-hover:text-indigo-600 transition-colors">
+                <div 
+                  className="text-xl font-black text-gray-900 tracking-tight mt-0.5 transition-colors"
+                >
                   {card.mainValue}
                 </div>
                 <div className="text-[11px] font-medium text-gray-500 mt-0.5 truncate">
@@ -281,7 +291,8 @@ export default function KPICards({
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.min(100, Math.max(5, card.progress))}%` }}
                     transition={{ duration: 0.8, delay: 0.2 + index * 0.05, ease: 'easeOut' }}
-                    className={`h-full rounded-full ${card.progressBarColor}`}
+                    className="h-full rounded-full"
+                    style={{ background: `linear-gradient(to right, ${pal.primaryHex}, ${pal.secondaryHex})` }}
                   />
                 </div>
               </div>
@@ -296,7 +307,7 @@ export default function KPICards({
               </div>
 
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowUpRight className="w-3.5 h-3.5 text-indigo-600" />
+                <ArrowUpRight className="w-3.5 h-3.5" style={{ color: pal.primaryHex }} />
               </div>
             </motion.div>
           );

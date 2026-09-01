@@ -12,15 +12,36 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
   const [enableMonthFilter, setEnableMonthFilter] = useState(true);
 
   const sheetsList = [
-    'Users',
-    'Employees',
-    'MachineCapacity',
-    'SkillMatrix',
-    'Leave',
-    'Overtime',
-    'Holidays',
-    'BestPractices',
-    'Supervisors',
+    { id: 'Employees', name: 'Employees Directory', group: 'Employee & Org' },
+    { id: 'Users', name: 'Users & Permissions', group: 'Employee & Org' },
+    { id: 'Supervisors', name: 'Supervisors & Managers Org', group: 'Employee & Org' },
+    { id: 'SkillMatrix', name: 'Skill Matrix', group: 'Employee & Org' },
+    
+    { id: 'Overtime', name: 'Overtime Records (Monthly Crosstab)', group: 'Attendance & Leave' },
+    { id: 'Leave', name: 'Leave Applications', group: 'Attendance & Leave' },
+    { id: 'SettlementAuditLog', name: 'Leave Settlement Audit Log', group: 'Attendance & Leave' },
+    { id: 'Holidays', name: 'Holiday Calendar', group: 'Attendance & Leave' },
+    { id: 'HolidayOverrides', name: 'Holiday Department Overrides', group: 'Attendance & Leave' },
+    { id: 'HolidayAudit', name: 'Holiday Audit Log', group: 'Attendance & Leave' },
+    { id: 'HolidayTypes', name: 'Holiday Types Master', group: 'Attendance & Leave' },
+    { id: 'Shifts', name: 'Shift Definitions', group: 'Attendance & Leave' },
+    { id: 'ShiftAssignments', name: 'Machine Shift Assignments', group: 'Attendance & Leave' },
+    { id: 'ShiftHistory', name: 'Shift Rotation History', group: 'Attendance & Leave' },
+
+    { id: 'MachineCapacity', name: 'Machine Capacity & Specs', group: 'Production & Machinery' },
+    { id: 'BreakdownLog', name: 'Breakdown & Maintenance Log', group: 'Production & Machinery' },
+    { id: 'BreakdownAuditLog', name: 'Breakdown Audit Trail', group: 'Production & Machinery' },
+    { id: 'BreakdownSettings', name: 'Breakdown Settings & Spare Parts', group: 'Production & Machinery' },
+    { id: 'Tasks', name: 'Factory Task Tracker', group: 'Production & Machinery' },
+
+    { id: 'BestPractices', name: 'Best Practices & Kaizen', group: 'Quality & 5S' },
+    { id: 'FiveS_Assessments', name: '5S Audit Assessments', group: 'Quality & 5S' },
+    { id: 'FiveS_CorrectiveActions', name: '5S Corrective Actions Log', group: 'Quality & 5S' },
+    { id: 'FiveS_Winners', name: '5S Top Performers & Winners', group: 'Quality & 5S' },
+    { id: 'FiveS_AuditLog', name: '5S System Audit Trail', group: 'Quality & 5S' },
+
+    { id: 'KPI', name: 'KPI Monthly Performance', group: 'Performance' },
+    { id: 'KpiPrivacy', name: 'KPI Privacy Settings', group: 'Performance' },
   ];
 
   const generateMachineCapacityReport = async (month?: string) => {
@@ -118,8 +139,22 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
     let dateColIdx = -1;
     
     if (sheetName === 'Leave') dateColIdx = 5; // From_Date
-    else if (sheetName === 'Holidays') dateColIdx = 0; // Holiday_Date
+    else if (sheetName === 'SettlementAuditLog') dateColIdx = 2; // Date
+    else if (sheetName === 'Holidays') dateColIdx = 2; // Holiday_Date
+    else if (sheetName === 'HolidayOverrides') dateColIdx = 1; // Holiday_Date
+    else if (sheetName === 'HolidayAudit') dateColIdx = 7; // Changed_At
     else if (sheetName === 'BestPractices') dateColIdx = 1; // Date
+    else if (sheetName === 'Overtime') dateColIdx = 1; // Date
+    else if (sheetName === 'KPI') dateColIdx = 4; // Month
+    else if (sheetName === 'ShiftAssignments') dateColIdx = 1; // Date
+    else if (sheetName === 'ShiftHistory') dateColIdx = 5; // Effective_Date
+    else if (sheetName === 'Tasks') dateColIdx = 9; // Start_Date
+    else if (sheetName === 'BreakdownLog') dateColIdx = 1; // Date
+    else if (sheetName === 'BreakdownAuditLog') dateColIdx = 3; // Date
+    else if (sheetName === 'FiveS_Assessments') dateColIdx = 2; // Month
+    else if (sheetName === 'FiveS_CorrectiveActions') dateColIdx = 11; // Target_Date
+    else if (sheetName === 'FiveS_Winners') dateColIdx = 1; // Month
+    else if (sheetName === 'FiveS_AuditLog') dateColIdx = 2; // Date
 
     if (dateColIdx === -1) return rawData;
 
@@ -164,7 +199,7 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
       const xlsx = getXlsx();
       const ws = xlsx.utils.aoa_to_sheet(dataToExport);
       const wb = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(wb, ws, selectedSheet);
+      xlsx.utils.book_append_sheet(wb, ws, selectedSheet.substring(0, 31));
       
       const fileName = enableMonthFilter && selectedMonth 
         ? `${selectedSheet}_Export_${selectedMonth}.xlsx`
@@ -186,7 +221,8 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
       const xlsx = getXlsx();
       const wb = xlsx.utils.book_new();
       
-      const promises = sheetsList.map(async (sheet) => {
+      const promises = sheetsList.map(async (sheetObj) => {
+        const sheet = sheetObj.id;
         try {
           let data: any[][] = [];
           if (sheet === 'Overtime' && enableMonthFilter && selectedMonth) {
@@ -202,7 +238,7 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
 
           if (data && data.length > 0) {
             const ws = xlsx.utils.aoa_to_sheet(data);
-            xlsx.utils.book_append_sheet(wb, ws, sheet);
+            xlsx.utils.book_append_sheet(wb, ws, sheet.substring(0, 31));
           }
         } catch (e) {
           console.error(`Failed to fetch sheet ${sheet}`, e);
@@ -230,6 +266,8 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
     }
   };
 
+  const selectedSheetObj = sheetsList.find(s => s.id === selectedSheet) || { name: selectedSheet };
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
@@ -241,19 +279,25 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
               <FileSpreadsheet className="w-5 h-5 mr-2 text-[#337AB7]" />
               Export Specific Module Data
             </h2>
-            <p className="text-[#73879C] text-sm mt-1">Select a module to export its data. Overtime will export in a daily crosstab format if a month is selected.</p>
+            <p className="text-[#73879C] text-sm mt-1">Select any module or sub-module report to export its clean dataset into Excel (.xlsx). Overtime will export in a daily crosstab format if a month is selected.</p>
           </div>
           
           <div className="p-6 bg-[#F9F9F9]">
             <div className="flex flex-col sm:flex-row items-end gap-4">
               <div className="flex-1 w-full">
-                <label className="block text-sm font-medium text-[#73879C] mb-1">Select Module</label>
+                <label className="block text-sm font-medium text-[#73879C] mb-1">Select Module / Sub-Module</label>
                 <select 
                   value={selectedSheet}
                   onChange={(e) => setSelectedSheet(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 >
-                  {sheetsList.map(s => <option key={s} value={s}>{s}</option>)}
+                  {['Employee & Org', 'Attendance & Leave', 'Production & Machinery', 'Quality & 5S', 'Performance'].map(group => (
+                    <optgroup key={group} label={group}>
+                      {sheetsList.filter(s => s.group === group).map(s => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.id})</option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
               
@@ -283,10 +327,10 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
                 <button
                   onClick={handleExport}
                   disabled={isExporting}
-                  className="w-full sm:w-auto flex items-center justify-center px-6 py-2 bg-[#337AB7] text-white rounded-lg hover:bg-[#286090] disabled:opacity-50 transition-colors"
+                  className="w-full sm:w-auto flex items-center justify-center px-6 py-2 bg-[#337AB7] text-white rounded-lg hover:bg-[#286090] disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   {isExporting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Download className="w-5 h-5 mr-2" />}
-                  Export {selectedSheet}
+                  Export {selectedSheetObj.name}
                 </button>
               </div>
             </div>
@@ -300,17 +344,17 @@ export default function Reports({ spreadsheetId }: { spreadsheetId: string }) {
             <Download className="w-5 h-5 mr-2 text-green-600" />
             Full Database Export
           </h2>
-          <p className="text-[#73879C] text-sm mt-1">Export all modules into a single Excel workbook. If month filter is enabled above, it will apply to supported sheets.</p>
+          <p className="text-[#73879C] text-sm mt-1">Export all 26 modules and sub-modules into a comprehensive multi-tab Excel workbook. If month filter is enabled above, it will apply to supported records.</p>
         </div>
         
         <div className="p-6 bg-[#F9F9F9] flex items-center justify-between flex-col sm:flex-row gap-4">
-          <div className="text-sm text-[#73879C]">
-            <strong>Included Sheets:</strong> Users, Employees, MachineCapacity, SkillMatrix, Leave, Overtime (crosstab), Holidays, BestPractices, Supervisors
+          <div className="text-sm text-[#73879C] max-w-xl">
+            <strong>Included Modules (26 Sheets):</strong> Employees, Users, Supervisors Org, Skill Matrix, Overtime, Leave & Audit Log, Holidays (Calendar, Overrides, Audit, Types), Shifts, Shift Assignments & History, Machine Capacity, Breakdowns & Audit/Settings, Tasks, Best Practices, 5S (Assessments, Actions, Winners, Audit), KPI & Privacy.
           </div>
           <button
             onClick={handleExportAll}
             disabled={isExporting}
-            className="w-full sm:w-auto flex items-center justify-center px-6 py-3 bg-[#26B99A] text-white rounded-lg font-medium hover:bg-[#169F85] disabled:opacity-50 transition-colors shadow-sm"
+            className="w-full sm:w-auto flex items-center justify-center px-6 py-3 bg-[#26B99A] text-white rounded-lg font-medium hover:bg-[#169F85] disabled:opacity-50 transition-colors shadow-sm cursor-pointer shrink-0"
           >
             {isExporting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Download className="w-5 h-5 mr-2" />}
             Export Entire Database

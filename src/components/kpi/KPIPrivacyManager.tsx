@@ -2,26 +2,37 @@ import { useState, useMemo } from 'react';
 import { 
   ShieldAlert, ShieldCheck, Eye, EyeOff, Search, 
   Lock, Unlock, CheckSquare, Square, RefreshCw,
-  Info, Check, Sparkles, Building2, User, Award, AlertTriangle
+  Info, Check, Sparkles, Building2, User, Award, AlertTriangle, Star
 } from 'lucide-react';
-import { Employee, KPIRecord, getRatingInfo, isKpiHiddenForEmployee } from './types';
+import { Employee, KPIRecord, getRatingInfo, isKpiHiddenForEmployee, PerformanceEvaluationRecord } from './types';
+import { PerformanceReviewItem } from '../../lib/performanceReviewEngine';
 
 interface KPIPrivacyManagerProps {
   employees: Employee[];
-  kpiRecords: KPIRecord[];
+  kpiRecords?: KPIRecord[];
+  evaluationRecords?: PerformanceEvaluationRecord[];
+  performanceReviews?: PerformanceReviewItem[];
   hiddenEmployeeIds: string[];
   onToggleHide: (employeeId: string) => Promise<void>;
   onBatchSaveHidden: (employeeIds: string[]) => Promise<void>;
   isLoading?: boolean;
+  moduleName?: 'Monthly KPI' | 'Performance Evaluation' | 'Performance Review' | string;
+  moduleTitle?: string;
+  moduleDescription?: string;
 }
 
 export default function KPIPrivacyManager({
   employees,
-  kpiRecords,
+  kpiRecords = [],
+  evaluationRecords = [],
+  performanceReviews = [],
   hiddenEmployeeIds,
   onToggleHide,
   onBatchSaveHidden,
-  isLoading = false
+  isLoading = false,
+  moduleName = 'Monthly KPI',
+  moduleTitle,
+  moduleDescription
 }: KPIPrivacyManagerProps) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'hidden' | 'visible'>('all');
@@ -49,6 +60,32 @@ export default function KPIPrivacyManager({
     });
     return map;
   }, [kpiRecords]);
+
+  // Latest Evaluation map per employee
+  const latestEvalMap = useMemo(() => {
+    const map = new Map<string, PerformanceEvaluationRecord>();
+    evaluationRecords.forEach(e => {
+      const empId = e.employeeId.toUpperCase();
+      const existing = map.get(empId);
+      if (!existing || (e.updatedAt && (!existing.updatedAt || e.updatedAt > existing.updatedAt))) {
+        map.set(empId, e);
+      }
+    });
+    return map;
+  }, [evaluationRecords]);
+
+  // Latest Review map per employee
+  const latestReviewMap = useMemo(() => {
+    const map = new Map<string, PerformanceReviewItem>();
+    performanceReviews.forEach(r => {
+      const empId = r.employeeId.toUpperCase();
+      const existing = map.get(empId);
+      if (!existing || (r.updatedAt && (!existing.updatedAt || r.updatedAt > existing.updatedAt))) {
+        map.set(empId, r);
+      }
+    });
+    return map;
+  }, [performanceReviews]);
 
   // Filtered employees list
   const filteredEmployees = useMemo(() => {
@@ -102,7 +139,7 @@ export default function KPIPrivacyManager({
     try {
       const nextHidden = Array.from(new Set([...hiddenEmployeeIds, ...selectedIds]));
       await onBatchSaveHidden(nextHidden);
-      setSuccessMessage(`Successfully hid KPI rating for ${selectedIds.length} employee(s) from other users.`);
+      setSuccessMessage(`Successfully hid ${moduleName} rating for ${selectedIds.length} employee(s) from standard users.`);
       setSelectedIds([]);
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
@@ -118,7 +155,7 @@ export default function KPIPrivacyManager({
     try {
       const nextHidden = hiddenEmployeeIds.filter(id => !selectedIds.includes(id.toUpperCase()));
       await onBatchSaveHidden(nextHidden);
-      setSuccessMessage(`Successfully made KPI rating visible for ${selectedIds.length} employee(s).`);
+      setSuccessMessage(`Successfully made ${moduleName} rating visible for ${selectedIds.length} employee(s).`);
       setSelectedIds([]);
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
@@ -127,6 +164,15 @@ export default function KPIPrivacyManager({
       setIsProcessing(false);
     }
   };
+
+  const displayTitle = moduleTitle || `Admin Privacy & Access Controls (${moduleName})`;
+  const displayDescription = moduleDescription || (
+    moduleName === 'Performance Evaluation'
+      ? `Control which employees' 10-point Competency Evaluation scores, ratings, and appraisal slips are hidden from non-admin users. As an Administrator, you retain full access to view, update, and manage all records at all times.`
+      : moduleName === 'Performance Review'
+      ? `Control which employees' Performance Review ratings, appraisal cycles, and scores are protected from standard viewers. As an Administrator, you retain full access to all review records at all times.`
+      : `Control which employees' Monthly KPI ratings, achievements, and evaluation scores are hidden from standard users and peers. As an Administrator, you retain full access to view, update, and manage all records at all times.`
+  );
 
   return (
     <div className="space-y-6">
@@ -138,12 +184,10 @@ export default function KPIPrivacyManager({
               <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-xs font-bold border border-amber-400/30 flex items-center gap-1">
                 <Lock className="w-3 h-3" /> Admin Exclusive Power
               </span>
-              <h3 className="text-lg font-bold">Custom KPI Rating Privacy & Visibility</h3>
+              <h3 className="text-lg font-bold">{displayTitle}</h3>
             </div>
             <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Control which employees&apos; Monthly KPI ratings, achievements, and evaluation scores are 
-              <strong className="text-white font-bold"> hidden from other standard users, supervisors, and colleagues</strong>. 
-              As an Administrator, you retain full access to view, update, and manage all records at all times.
+              {displayDescription}
             </p>
           </div>
 
@@ -241,22 +285,22 @@ export default function KPIPrivacyManager({
               <button
                 onClick={handleBatchHide}
                 disabled={isProcessing}
-                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-md font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-md font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 <Lock className="w-3.5 h-3.5" />
-                Hide KPI Rating for Selected
+                Hide {moduleName} Rating for Selected
               </button>
               <button
                 onClick={handleBatchUnhide}
                 disabled={isProcessing}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 <Unlock className="w-3.5 h-3.5" />
                 Make Selected Visible
               </button>
               <button
                 onClick={() => setSelectedIds([])}
-                className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md font-medium transition-colors"
+                className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md font-medium transition-colors cursor-pointer"
               >
                 Clear Selection
               </button>
@@ -281,7 +325,13 @@ export default function KPIPrivacyManager({
                 </th>
                 <th className="py-3.5 px-4">Employee ID & Name</th>
                 <th className="py-3.5 px-4">Department & Designation</th>
-                <th className="py-3.5 px-4">Latest KPI Score</th>
+                <th className="py-3.5 px-4">
+                  {moduleName === 'Performance Evaluation' 
+                    ? 'Latest Evaluation (1-5★)' 
+                    : moduleName === 'Performance Review' 
+                    ? 'Latest Review Rating' 
+                    : 'Latest KPI Score'}
+                </th>
                 <th className="py-3.5 px-4">Visibility for Other Users</th>
                 <th className="py-3.5 px-4 text-right">Admin Privacy Toggle</th>
               </tr>
@@ -299,6 +349,8 @@ export default function KPIPrivacyManager({
                   const isHidden = isKpiHiddenForEmployee(emp.id, hiddenEmployeeIds);
                   const isSelected = selectedIds.includes(emp.id.toUpperCase());
                   const latestKpi = latestKpiMap.get(emp.id.toUpperCase());
+                  const latestEval = latestEvalMap.get(emp.id.toUpperCase());
+                  const latestReview = latestReviewMap.get(emp.id.toUpperCase());
                   const ratingInfo = latestKpi ? getRatingInfo(latestKpi.rating) : null;
 
                   return (
@@ -346,25 +398,64 @@ export default function KPIPrivacyManager({
                         <div className="text-[11px] text-gray-500">{emp.designation || '—'}</div>
                       </td>
 
-                      {/* Latest KPI Score */}
+                      {/* Latest Score Column */}
                       <td className="py-3.5 px-4">
-                        {latestKpi ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span 
-                                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold"
-                                style={{ backgroundColor: ratingInfo?.bg ? undefined : '#f3f4f6', color: ratingInfo?.color }}
-                              >
-                                ★ {latestKpi.rating.toFixed(1)} • {ratingInfo?.label || 'Rating'}
-                              </span>
-                              <span className="text-[11px] font-bold text-gray-600">
-                                {latestKpi.achievement}%
-                              </span>
+                        {moduleName === 'Performance Evaluation' ? (
+                          latestEval ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                  <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                                  ★ {latestEval.averageRating.toFixed(2)} ({latestEval.totalScore}/50)
+                                </span>
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                  {latestEval.ratingGrade}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-gray-400">{latestEval.period}</div>
                             </div>
-                            <div className="text-[10px] text-gray-400">{latestKpi.month}</div>
-                          </div>
+                          ) : (
+                            <span className="text-gray-400 italic">No evaluation record</span>
+                          )
+                        ) : moduleName === 'Performance Review' ? (
+                          latestReview ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                {latestReview.score !== undefined ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                                    {latestReview.score}% • ★ {latestReview.rating || '—'}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-medium text-slate-500 italic">Pending Appraisal</span>
+                                )}
+                                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded">
+                                  {latestReview.calculatedStatus}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-gray-400">{latestReview.reviewType}</div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic">No review cycle</span>
+                          )
                         ) : (
-                          <span className="text-gray-400 italic">No KPI record</span>
+                          latestKpi ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <span 
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                  style={{ backgroundColor: ratingInfo?.bg ? undefined : '#f3f4f6', color: ratingInfo?.color }}
+                                >
+                                  ★ {latestKpi.rating.toFixed(1)} • {ratingInfo?.label || 'Rating'}
+                                </span>
+                                <span className="text-[11px] font-bold text-gray-600">
+                                  {latestKpi.achievement}%
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-gray-400">{latestKpi.month}</div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic">No KPI record</span>
+                          )
                         )}
                       </td>
 
@@ -388,7 +479,7 @@ export default function KPIPrivacyManager({
                         <button
                           onClick={() => onToggleHide(emp.id)}
                           disabled={isLoading}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-2xs ${
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer ${
                             isHidden
                               ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                               : 'bg-amber-500 hover:bg-amber-600 text-white'
