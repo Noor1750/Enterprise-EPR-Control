@@ -3,7 +3,7 @@ import {
   Award, Calendar, CheckCircle2, Clock, AlertTriangle, Plus, Search, 
   Filter, UserCheck, Star, Sparkles, RefreshCw, ChevronRight, X,
   Layers, BarChart3, AlertCircle, FileText, Send, User, Building,
-  Lock, ShieldCheck, ShieldAlert, Check
+  Lock, ShieldCheck, ShieldAlert, Check, ChevronDown
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { 
@@ -16,7 +16,7 @@ import {
   ensurePerformanceEvaluationSheet, saveHiddenKpiEmployeeIds,
   appendRow
 } from '../../lib/sheets';
-import { UserSecurityScope, filterAuthorizedEmployees, SUPER_ADMIN_EMAILS } from '../../lib/security';
+import { UserSecurityScope, filterAuthorizedEmployees, getAuthorizedEmployeeIdSet, SUPER_ADMIN_EMAILS } from '../../lib/security';
 import { PerformanceEvaluationRecord, EvaluationScores, calculateEvaluationSummary, isKpiHiddenForEmployee } from '../kpi/types';
 import KPIPrivacyManager from '../kpi/KPIPrivacyManager';
 import { resolvePaletteForModule } from '../../lib/colorPalettes';
@@ -85,6 +85,22 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
   const [formDueBy, setFormDueBy] = useState(format(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignProgress, setAssignProgress] = useState(0);
+
+  // Reviewer Searchable Dropdown State
+  const [isReviewerDropdownOpen, setIsReviewerDropdownOpen] = useState(false);
+  const [reviewerSearchTerm, setReviewerSearchTerm] = useState('');
+  const reviewerDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Click outside to close reviewer dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (reviewerDropdownRef.current && !reviewerDropdownRef.current.contains(event.target as Node)) {
+        setIsReviewerDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Conduct/Score Form State
   const [scoreVal, setScoreVal] = useState<number>(85);
@@ -316,22 +332,80 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
     });
   }, [authorizedEmployees, assignDeptFilter, assignSupervisorFilter, assignSearch]);
 
+  // Searchable Evaluators / Reviewers from full Employee Directory
+  const searchableReviewers = useMemo(() => {
+    const list = employeesRaw.map(r => ({
+      id: r[0] || '',
+      name: r[1] || '',
+      designation: r[2] || '',
+      department: r[3] || '',
+      email: r[8] || '',
+      status: r[9] || 'Active',
+      supervisor: r[6] || '',
+      manager: r[17] || ''
+    })).filter(e => e.id && e.name);
+
+    if (!reviewerSearchTerm.trim()) return list;
+    const q = reviewerSearchTerm.toLowerCase().trim();
+    return list.filter(e => 
+      e.name.toLowerCase().includes(q) ||
+      e.id.toLowerCase().includes(q) ||
+      e.department.toLowerCase().includes(q) ||
+      e.designation.toLowerCase().includes(q)
+    );
+  }, [employeesRaw, reviewerSearchTerm]);
+
+  // Auto-detect supervisor for selected employee(s) in Assign Reviews modal
+  useEffect(() => {
+    if (selectedEmpIds.length === 0) return;
+    const selectedEmps = authorizedEmployees.filter(e => selectedEmpIds.includes(e.id));
+    if (selectedEmps.length === 1) {
+      const sup = selectedEmps[0].supervisor;
+      if (sup && sup.trim()) {
+        setFormReviewerName(sup.trim());
+      }
+    } else if (selectedEmps.length > 1) {
+      const sups = Array.from(new Set(selectedEmps.map(e => e.supervisor?.trim()).filter(Boolean)));
+      if (sups.length === 1 && sups[0]) {
+        setFormReviewerName(sups[0]);
+      }
+    }
+  }, [selectedEmpIds, authorizedEmployees]);
+
+  // Privacy Scoped Reviews based on User Security Access Scope
+  const isRestrictedScope = useMemo(() => {
+    return Boolean(userSecurityScope && !userSecurityScope.isAdmin && userSecurityScope.accessLimitType !== 'all');
+  }, [userSecurityScope]);
+
+  const authorizedIdSet = useMemo(() => {
+    return getAuthorizedEmployeeIdSet(employeesRaw, userSecurityScope);
+  }, [employeesRaw, userSecurityScope]);
+
+  // Privacy-filtered reviews matching user's assigned scope or where user is reviewer
+  const scopedReviews = useMemo(() => {
+    if (!isRestrictedScope) return reviews;
+    return reviews.filter(r => 
+      authorizedIdSet.has((r.employeeId || '').toUpperCase()) ||
+      (r.reviewerName && userSecurityScope?.employeeName && r.reviewerName.toLowerCase().includes(userSecurityScope.employeeName.toLowerCase()))
+    );
+  }, [reviews, isRestrictedScope, authorizedIdSet, userSecurityScope]);
+
   // Metric counts
   const metrics = useMemo(() => {
-    const total = reviews.length;
-    const scheduled = reviews.filter(r => r.calculatedStatus === 'Scheduled').length;
-    const notStarted = reviews.filter(r => r.calculatedStatus === 'Not Started').length;
-    const inProgress = reviews.filter(r => r.calculatedStatus === 'In Progress').length;
-    const submitted = reviews.filter(r => r.calculatedStatus === 'Submitted').length;
-    const completed = reviews.filter(r => r.calculatedStatus === 'Completed').length;
-    const overdue = reviews.filter(r => r.calculatedStatus === 'Overdue').length;
+    const total = scopedReviews.length;
+    const scheduled = scopedReviews.filter(r => r.calculatedStatus === 'Scheduled').length;
+    const notStarted = scopedReviews.filter(r => r.calculatedStatus === 'Not Started').length;
+    const inProgress = scopedReviews.filter(r => r.calculatedStatus === 'In Progress').length;
+    const submitted = scopedReviews.filter(r => r.calculatedStatus === 'Submitted').length;
+    const completed = scopedReviews.filter(r => r.calculatedStatus === 'Completed').length;
+    const overdue = scopedReviews.filter(r => r.calculatedStatus === 'Overdue').length;
 
     return { total, scheduled, notStarted, inProgress, submitted, completed, overdue };
-  }, [reviews]);
+  }, [scopedReviews]);
 
   // Filtered reviews
   const filteredReviews = useMemo(() => {
-    return reviews.filter(r => {
+    return scopedReviews.filter(r => {
       const isHidden = isKpiHiddenForEmployee(r.employeeId, hiddenEmployeeIds);
 
       // Admin Visibility Filter
@@ -350,7 +424,7 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
       }
       return true;
     });
-  }, [reviews, selectedVisibility, hiddenEmployeeIds, statusFilter, typeFilter, deptFilter, search]);
+  }, [scopedReviews, selectedVisibility, hiddenEmployeeIds, statusFilter, typeFilter, deptFilter, search]);
 
   // Handle Assign Submit
   const handleAssignSubmit = async (e: React.FormEvent) => {
@@ -953,16 +1027,146 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Assigned Reviewer</label>
-                  <input
-                    type="text"
-                    value={formReviewerName}
-                    onChange={e => setFormReviewerName(e.target.value)}
-                    placeholder="e.g. Supervisor Sarah Connor or Manager"
-                    required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
-                  />
+                {/* Searchable Assigned Reviewer Field */}
+                <div className="relative" ref={reviewerDropdownRef}>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Assigned Reviewer *</span>
+                    <span className="text-[10px] text-indigo-600 font-medium">
+                      Search Directory / Auto Supervisor
+                    </span>
+                  </label>
+
+                  <div className="relative">
+                    <div 
+                      onClick={() => setIsReviewerDropdownOpen(true)}
+                      className={`w-full bg-slate-50 border rounded-xl transition-all flex items-center justify-between px-3 py-2 cursor-pointer ${
+                        isReviewerDropdownOpen 
+                          ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-white' 
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <input
+                          type="text"
+                          value={formReviewerName}
+                          onChange={e => {
+                            setFormReviewerName(e.target.value);
+                            setReviewerSearchTerm(e.target.value);
+                            setIsReviewerDropdownOpen(true);
+                          }}
+                          onFocus={() => setIsReviewerDropdownOpen(true)}
+                          placeholder="Search Staff ID, Name or type Reviewer..."
+                          required
+                          className="w-full bg-transparent border-none p-0 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {formReviewerName && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFormReviewerName('');
+                              setReviewerSearchTerm('');
+                              setIsReviewerDropdownOpen(true);
+                            }}
+                            className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-200 transition"
+                            title="Clear"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isReviewerDropdownOpen ? 'rotate-180 text-indigo-600' : ''}`} />
+                      </div>
+                    </div>
+
+                    {/* Dropdown Floating Search Menu */}
+                    {isReviewerDropdownOpen && (
+                      <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-fade-in max-h-64 flex flex-col">
+                        
+                        {/* Search Input in Dropdown */}
+                        <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <input
+                            type="text"
+                            placeholder="Filter by ID, Name or Department..."
+                            value={reviewerSearchTerm}
+                            onChange={(e) => setReviewerSearchTerm(e.target.value)}
+                            className="w-full bg-transparent border-none text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
+                            autoFocus
+                          />
+                          {reviewerSearchTerm && (
+                            <button
+                              type="button"
+                              onClick={() => setReviewerSearchTerm('')}
+                              className="text-slate-400 hover:text-slate-600"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Directory List Items */}
+                        <div className="overflow-y-auto max-h-48 divide-y divide-slate-100">
+                          {searchableReviewers.length === 0 ? (
+                            <div className="p-3 text-center text-xs text-slate-500">
+                              No staff found. You can keep typing custom reviewer above.
+                            </div>
+                          ) : (
+                            searchableReviewers.map((emp) => {
+                              const isSelected = formReviewerName.toLowerCase() === emp.name.toLowerCase() || formReviewerName.toLowerCase().includes(emp.id.toLowerCase());
+                              return (
+                                <div
+                                  key={`reviewer-${emp.id}`}
+                                  onClick={() => {
+                                    setFormReviewerName(`${emp.name} (${emp.id})`);
+                                    setIsReviewerDropdownOpen(false);
+                                    setReviewerSearchTerm('');
+                                  }}
+                                  className={`p-2 hover:bg-indigo-50/60 cursor-pointer transition flex items-center justify-between gap-2 ${
+                                    isSelected ? 'bg-indigo-50/90' : ''
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0 border border-slate-200">
+                                      {emp.name.charAt(0)}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-bold text-xs truncate text-slate-900">
+                                          {emp.name}
+                                        </span>
+                                        <span className="text-[10px] font-bold px-1 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                                          {emp.id}
+                                        </span>
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 flex items-center gap-1 truncate">
+                                        <span>{emp.department || 'General'}</span>
+                                        {emp.designation && <span>• {emp.designation}</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {isSelected && (
+                                    <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* Footer Info */}
+                        <div className="px-3 py-1 bg-slate-50 border-t border-slate-100 text-[9px] text-slate-500 flex items-center justify-between">
+                          <span>{searchableReviewers.length} Reviewers in Directory</span>
+                          <span>Click to assign</span>
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

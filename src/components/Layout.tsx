@@ -173,8 +173,10 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
             department: String(row[3] || '').trim(),
             dateOfJoin: String(row[4] || '').trim(),
             category: String(row[5] || '').trim(),
+            supervisor: String(row[6] || '').trim(),
             status: String(row[9] || 'Active').trim(),
-            profilePicture: String(row[16] || '').trim()
+            profilePicture: String(row[16] || '').trim(),
+            manager: String(row[17] || '').trim()
           })).filter(e => e.id);
           setEmployees(mapped);
 

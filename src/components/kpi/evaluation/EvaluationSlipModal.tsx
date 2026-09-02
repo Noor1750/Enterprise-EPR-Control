@@ -4,6 +4,7 @@ import {
   Briefcase, Clock, CheckCircle2, Star, FileText, Lock, ShieldAlert 
 } from 'lucide-react';
 import { PerformanceEvaluationRecord, EVALUATION_CRITERIA_LIST, isKpiHiddenForEmployee } from '../types';
+import { KPI_RATING_SCHEME } from './PerformanceRatingScheme';
 
 interface EvaluationSlipModalProps {
   evaluation: PerformanceEvaluationRecord;
@@ -243,6 +244,34 @@ export default function EvaluationSlipModal({
                   Recommendation: <span className="text-blue-700">{evaluation.recommendation}</span>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Official 1-5 Rating Scheme Legend & Standard Benchmark */}
+          <div className="border border-slate-300 rounded-xl overflow-hidden text-xs">
+            <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
+              <span>Official 1-5 Performance Rating Scheme Standard</span>
+              <span className="text-slate-500 font-normal">Applies to all 10 Core Competencies</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 bg-white">
+              {KPI_RATING_SCHEME.map((item) => (
+                <div key={item.point} className="p-2.5 flex flex-col justify-between text-center space-y-1">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span 
+                      className="w-5 h-5 rounded-full text-white font-black text-[10px] flex items-center justify-center"
+                      style={{ backgroundColor: item.colorHex }}
+                    >
+                      {item.point}
+                    </span>
+                    <strong className="text-xs font-bold" style={{ color: item.colorHex }}>
+                      {item.label}
+                    </strong>
+                  </div>
+                  <p className="text-[10px] text-slate-600 leading-tight">
+                    {item.description}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
 

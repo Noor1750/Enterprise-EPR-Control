@@ -8,12 +8,14 @@ import {
   Employee, PerformanceEvaluationRecord, EvaluationScores, 
   calculateEvaluationSummary, calculateYearOfService 
 } from '../types';
+import { filterAuthorizedEmployees, getAuthorizedEmployeeIdSet } from '../../../lib/security';
 import EvaluationForm from './EvaluationForm';
 import EvaluationRecords from './EvaluationRecords';
 import EvaluationAnalytics from './EvaluationAnalytics';
 import EvaluationSlipModal from './EvaluationSlipModal';
 import KPIPrivacyManager from '../KPIPrivacyManager';
 import PerformanceReviews from '../../performance/PerformanceReviews';
+import PerformanceRatingScheme from './PerformanceRatingScheme';
 import { 
   getRange, appendRow, updateRange, deleteRowByPrimaryKey, 
   ensurePerformanceEvaluationSheet, PERFORMANCE_EVALUATION_HEADERS,
@@ -178,6 +180,25 @@ export default function PerformanceEvaluation({
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const isAdmin = Boolean(userSecurityScope?.isAdmin);
+
+  // Security Scoped Access for Privacy & Data Protection
+  const authorizedEmployees = React.useMemo(() => {
+    return filterAuthorizedEmployees(employees, userSecurityScope);
+  }, [employees, userSecurityScope]);
+
+  const authorizedIdSet = React.useMemo(() => {
+    return getAuthorizedEmployeeIdSet(employees, userSecurityScope);
+  }, [employees, userSecurityScope]);
+
+  const isRestrictedScope = React.useMemo(() => {
+    return Boolean(userSecurityScope && !userSecurityScope.isAdmin && userSecurityScope.accessLimitType !== 'all');
+  }, [userSecurityScope]);
+
+  // Privacy-filtered evaluation records matching assigned employees
+  const authorizedRecords = React.useMemo(() => {
+    if (!isRestrictedScope) return records;
+    return records.filter(r => authorizedIdSet.has((r.employeeId || '').toUpperCase()));
+  }, [records, isRestrictedScope, authorizedIdSet]);
 
   // Toggle Hidden Status Handler
   const handleToggleHide = async (employeeId: string) => {
@@ -565,10 +586,35 @@ export default function PerformanceEvaluation({
         </div>
       )}
 
+      {/* Restricted Security Scope Notice */}
+      {isRestrictedScope && (
+        <div className="px-4 py-2.5 bg-indigo-50/80 border border-indigo-200 rounded-xl text-xs text-indigo-900 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Lock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span>
+              <strong>Supervisor Privacy Filter Active:</strong> Displaying only data for <strong>{authorizedEmployees.length}</strong> employee(s) assigned to your supervision.
+            </span>
+          </div>
+          <span className="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200">
+            Scoped Access
+          </span>
+        </div>
+      )}
+
+      {/* Official 1-5 Rating Scheme Reference Banner */}
+      {subTab !== 'new' && (
+        <PerformanceRatingScheme 
+          collapsible={true}
+          defaultExpanded={false}
+          title="Performance Evaluation Rating Scheme (1 – 5 Rating Scale)"
+          subtitle="Click to expand official visual rating scheme, point benchmarks, and performance descriptions"
+        />
+      )}
+
       {/* SUBTAB RENDERING */}
       {subTab === 'records' && !editingRecord && (
         <EvaluationRecords
-          records={records}
+          records={authorizedRecords}
           isLoading={isLoading}
           hiddenEmployeeIds={hiddenEmployeeIds}
           isAdmin={isAdmin}
@@ -584,14 +630,20 @@ export default function PerformanceEvaluation({
 
       {(subTab === 'new' || editingRecord) && (
         <EvaluationForm
-          employees={employees}
+          employees={authorizedEmployees}
+          allEmployees={employees}
           initialData={editingRecord}
+          existingRecords={authorizedRecords}
           onSave={handleSaveEvaluation}
           onCancel={() => {
             setEditingRecord(null);
             setSubTab('records');
           }}
           currentUserEmail={userEmail}
+          userSecurityScope={userSecurityScope}
+          onSelectExistingForEdit={(record) => {
+            setEditingRecord(record);
+          }}
         />
       )}
 
@@ -605,7 +657,7 @@ export default function PerformanceEvaluation({
 
       {subTab === 'analytics' && !editingRecord && (
         <EvaluationAnalytics 
-          records={records}
+          records={authorizedRecords}
           hiddenEmployeeIds={hiddenEmployeeIds}
           isAdmin={isAdmin}
         />

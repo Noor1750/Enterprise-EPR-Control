@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   User, Calendar, Clock, Award, Star, CheckCircle2, AlertCircle, 
   HelpCircle, ChevronRight, Save, RotateCcw, Building, Briefcase, 
-  Sparkles, Check, Info, ShieldCheck, ArrowRight
+  Sparkles, Check, Info, ShieldCheck, ArrowRight, Search, ChevronDown, 
+  X, FileCheck, AlertTriangle, ExternalLink
 } from 'lucide-react';
 import { 
   Employee, PerformanceEvaluationRecord, EvaluationScores, 
@@ -10,38 +11,55 @@ import {
   calculateEvaluationSummary, calculateYearOfService, 
   generateEvaluationPeriodOptions 
 } from '../types';
+import PerformanceRatingScheme, { KPI_RATING_SCHEME } from './PerformanceRatingScheme';
 
 interface EvaluationFormProps {
   employees: Employee[];
+  allEmployees?: Employee[];
   initialData?: PerformanceEvaluationRecord | null;
+  existingRecords?: PerformanceEvaluationRecord[];
   onSave: (record: Partial<PerformanceEvaluationRecord>) => Promise<boolean>;
   onCancel?: () => void;
   currentUserEmail?: string;
+  userSecurityScope?: any;
+  onSelectExistingForEdit?: (record: PerformanceEvaluationRecord) => void;
 }
 
 const DEFAULT_SCORES: EvaluationScores = {
-  jobKnowledge: 4,
-  quantityOfOutput: 4,
-  qualityOfWork: 4,
-  attendanceCommitment: 4,
-  initiativeImprovement: 3,
-  dependability: 4,
-  attitude: 4,
-  creativityAnalytical: 3,
-  communicationSkills: 4,
-  teamworkRelationship: 4,
+  jobKnowledge: 0,
+  quantityOfOutput: 0,
+  qualityOfWork: 0,
+  attendanceCommitment: 0,
+  initiativeImprovement: 0,
+  dependability: 0,
+  attitude: 0,
+  creativityAnalytical: 0,
+  communicationSkills: 0,
+  teamworkRelationship: 0,
 };
 
 export default function EvaluationForm({
   employees,
+  allEmployees,
   initialData,
+  existingRecords = [],
   onSave,
   onCancel,
-  currentUserEmail = 'Supervisor'
+  currentUserEmail = 'Supervisor',
+  userSecurityScope,
+  onSelectExistingForEdit
 }: EvaluationFormProps) {
   // Employee Selection State
   const [selectedEmpId, setSelectedEmpId] = useState<string>(initialData?.employeeId || '');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Evaluator / Supervisor Directory Selection State
+  const [evaluatedBy, setEvaluatedBy] = useState<string>(initialData?.evaluatedBy || currentUserEmail);
+  const [evaluatorSearchTerm, setEvaluatorSearchTerm] = useState<string>('');
+  const [isEvaluatorDropdownOpen, setIsEvaluatorDropdownOpen] = useState<boolean>(false);
+  const evaluatorDropdownRef = useRef<HTMLDivElement>(null);
   
   // Period & Metadata State
   const [evaluationType, setEvaluationType] = useState<EvaluationPeriodType>(initialData?.evaluationType || 'Quarterly');
@@ -49,13 +67,12 @@ export default function EvaluationForm({
   const [evaluationDate, setEvaluationDate] = useState<string>(
     initialData?.evaluationDate || new Date().toISOString().substring(0, 10)
   );
-  const [evaluatedBy, setEvaluatedBy] = useState<string>(initialData?.evaluatedBy || currentUserEmail);
 
   // Manual Overrides for Employee Metadata if needed
   const [customDateJoined, setCustomDateJoined] = useState<string>(initialData?.dateJoined || '');
   const [customYearOfService, setCustomYearOfService] = useState<string>(initialData?.yearOfService || '');
 
-  // 10 Points Scoring State
+  // 10 Points Scoring State (Defaults to 0 / Unselected for pending employees)
   const [scores, setScores] = useState<EvaluationScores>(initialData?.scores || DEFAULT_SCORES);
   
   // Qualitative Feedback State
@@ -72,6 +89,11 @@ export default function EvaluationForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
+  // Full Directory for Evaluator selection
+  const directoryEmployees = useMemo(() => {
+    return allEmployees && allEmployees.length > 0 ? allEmployees : employees;
+  }, [allEmployees, employees]);
+
   // Period Options generator
   const periodOptions = useMemo(() => generateEvaluationPeriodOptions(), []);
   
@@ -79,19 +101,92 @@ export default function EvaluationForm({
     return periodOptions.filter(p => p.type === evaluationType);
   }, [periodOptions, evaluationType]);
 
+  const currentPeriodLabel = useMemo(() => {
+    const matched = filteredPeriods.find(p => p.periodKey === selectedPeriodKey);
+    return matched ? matched.label : selectedPeriodKey;
+  }, [filteredPeriods, selectedPeriodKey]);
+
   // Selected Employee Details
   const selectedEmployee = useMemo(() => {
-    return employees.find(e => e.id.toLowerCase() === selectedEmpId.toLowerCase());
-  }, [employees, selectedEmpId]);
+    return directoryEmployees.find(e => e.id.toLowerCase() === (selectedEmpId || '').toLowerCase()) ||
+           employees.find(e => e.id.toLowerCase() === (selectedEmpId || '').toLowerCase());
+  }, [directoryEmployees, employees, selectedEmpId]);
 
-  // Auto-fill employee info when selected
+  // Check if selected employee has an existing completed/finalized evaluation for this selected period
+  const existingEvaluationForPeriod = useMemo(() => {
+    if (!selectedEmpId || !existingRecords || existingRecords.length === 0) return null;
+    return existingRecords.find(
+      r => r.employeeId.toLowerCase() === selectedEmpId.toLowerCase() && 
+           r.periodKey === selectedPeriodKey &&
+           r.id !== initialData?.id
+    ) || null;
+  }, [selectedEmpId, selectedPeriodKey, existingRecords, initialData]);
+
+  // Other evaluations on file for this employee
+  const otherEvaluationsForEmployee = useMemo(() => {
+    if (!selectedEmpId || !existingRecords || existingRecords.length === 0) return [];
+    return existingRecords.filter(
+      r => r.employeeId.toLowerCase() === selectedEmpId.toLowerCase() &&
+           r.periodKey !== selectedPeriodKey
+    );
+  }, [selectedEmpId, selectedPeriodKey, existingRecords]);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+      if (evaluatorDropdownRef.current && !evaluatorDropdownRef.current.contains(event.target as Node)) {
+        setIsEvaluatorDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Auto-fill employee info and automatically select assigned supervisor when employee is selected
   useEffect(() => {
     if (selectedEmployee) {
       if (selectedEmployee.dateOfJoin) {
         setCustomDateJoined(selectedEmployee.dateOfJoin);
       }
+      // Auto-assign supervisor if creating a new evaluation
+      if (!initialData) {
+        if (selectedEmployee.supervisor && selectedEmployee.supervisor.trim()) {
+          setEvaluatedBy(selectedEmployee.supervisor.trim());
+        } else if (selectedEmployee.manager && selectedEmployee.manager.trim()) {
+          setEvaluatedBy(selectedEmployee.manager.trim());
+        } else if (userSecurityScope?.employeeName) {
+          setEvaluatedBy(userSecurityScope.employeeName);
+        } else if (currentUserEmail) {
+          setEvaluatedBy(currentUserEmail);
+        }
+      }
     }
-  }, [selectedEmployee]);
+  }, [selectedEmployee, initialData, userSecurityScope, currentUserEmail]);
+
+  // Load existing evaluation data if requested
+  const handleLoadExistingEvaluation = (evalRecord: PerformanceEvaluationRecord) => {
+    if (onSelectExistingForEdit) {
+      onSelectExistingForEdit(evalRecord);
+      return;
+    }
+    setSelectedEmpId(evalRecord.employeeId);
+    setSelectedPeriodKey(evalRecord.periodKey);
+    setEvaluationType(evalRecord.evaluationType);
+    setScores(evalRecord.scores || DEFAULT_SCORES);
+    setStrengths(evalRecord.strengths || '');
+    setAreasOfImprovement(evalRecord.areasOfImprovement || '');
+    setRecommendation(evalRecord.recommendation || 'Regular Confirmed (Satisfactory Performance)');
+    setComments(evalRecord.comments || '');
+    setEvaluationDate(evalRecord.evaluationDate || new Date().toISOString().substring(0, 10));
+    setEvaluatedBy(evalRecord.evaluatedBy || currentUserEmail);
+    if (evalRecord.dateJoined) setCustomDateJoined(evalRecord.dateJoined);
+    if (evalRecord.yearOfService) setCustomYearOfService(evalRecord.yearOfService);
+    setSuccessToast(`Loaded existing finalized evaluation (${evalRecord.period}) for ${evalRecord.employeeName}. You can now review or update it.`);
+    setTimeout(() => setSuccessToast(null), 5000);
+  };
 
   // Compute Year of Service automatically from Date Joined
   const computedService = useMemo(() => {
@@ -134,6 +229,14 @@ export default function EvaluationForm({
 
     if (!selectedEmpId) {
       setValidationError('Please select an employee to evaluate.');
+      return;
+    }
+
+    // Strict check: 10-Point Performance Criteria Assessment must all be rated (not 0 / unselected)
+    const unratedCriteria = EVALUATION_CRITERIA_LIST.filter(c => !scores[c.key] || scores[c.key] === 0);
+    if (unratedCriteria.length > 0) {
+      const missingList = unratedCriteria.map(c => `#${c.id} ${c.title}`).join(', ');
+      setValidationError(`Please complete assessment for all 10 Performance Criteria before submitting. Unselected (${unratedCriteria.length}/10): ${missingList}`);
       return;
     }
 
@@ -198,17 +301,30 @@ export default function EvaluationForm({
     }
   };
 
-  // Filter employee list by search term
+  // Filter employee list by search term for target employee selection
   const searchableEmployees = useMemo(() => {
-    if (!searchTerm) return employees.slice(0, 50);
-    const term = searchTerm.toLowerCase();
+    if (!searchTerm) return employees;
+    const term = searchTerm.toLowerCase().trim();
     return employees.filter(e => 
-      e.id.toLowerCase().includes(term) ||
-      e.name.toLowerCase().includes(term) ||
+      (e.id && e.id.toLowerCase().includes(term)) ||
+      (e.name && e.name.toLowerCase().includes(term)) ||
+      (e.department && e.department.toLowerCase().includes(term)) ||
+      (e.designation && e.designation.toLowerCase().includes(term)) ||
+      (e.supervisor && e.supervisor.toLowerCase().includes(term))
+    );
+  }, [employees, searchTerm]);
+
+  // Filter directory list for Evaluator / Supervisor selection
+  const searchableEvaluators = useMemo(() => {
+    if (!evaluatorSearchTerm) return directoryEmployees;
+    const term = evaluatorSearchTerm.toLowerCase().trim();
+    return directoryEmployees.filter(e => 
+      (e.id && e.id.toLowerCase().includes(term)) ||
+      (e.name && e.name.toLowerCase().includes(term)) ||
       (e.department && e.department.toLowerCase().includes(term)) ||
       (e.designation && e.designation.toLowerCase().includes(term))
-    ).slice(0, 50);
-  }, [employees, searchTerm]);
+    );
+  }, [directoryEmployees, evaluatorSearchTerm]);
 
   return (
     <div className="space-y-6">
@@ -295,21 +411,176 @@ export default function EvaluationForm({
                 value={evaluationDate}
                 onChange={(e) => setEvaluationDate(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-              />
+              >
+              </input>
             </div>
 
-            {/* Evaluator / Supervisor */}
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Evaluator / Supervisor Name
+            {/* Evaluator / Supervisor (Searchable Dropdown as per Employee Directory) */}
+            <div className="sm:col-span-2 relative" ref={evaluatorDropdownRef}>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                <span>Evaluator / Supervisor Name *</span>
+                {selectedEmployee?.supervisor && (
+                  <span className="text-[10px] text-indigo-600 font-medium">
+                    Assigned: {selectedEmployee.supervisor}
+                  </span>
+                )}
               </label>
-              <input
-                type="text"
-                value={evaluatedBy}
-                onChange={(e) => setEvaluatedBy(e.target.value)}
-                placeholder="e.g. Operations Manager / Shift Incharge"
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-              />
+
+              {/* Evaluator Combobox / Search Trigger */}
+              <div className="relative">
+                <div 
+                  onClick={() => setIsEvaluatorDropdownOpen(true)}
+                  className={`w-full bg-white border rounded-xl transition-all shadow-2xs flex items-center justify-between px-3 py-2 cursor-pointer ${
+                    isEvaluatorDropdownOpen 
+                      ? 'border-indigo-500 ring-2 ring-indigo-500/20' 
+                      : evaluatedBy 
+                        ? 'border-slate-300 bg-slate-50/50' 
+                        : 'border-slate-300 hover:border-slate-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
+                    <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                    <input
+                      type="text"
+                      value={evaluatedBy}
+                      onChange={(e) => {
+                        setEvaluatedBy(e.target.value);
+                        setEvaluatorSearchTerm(e.target.value);
+                        setIsEvaluatorDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsEvaluatorDropdownOpen(true)}
+                      placeholder="Search ID, Name or type evaluator..."
+                      className="w-full bg-transparent border-none p-0 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {evaluatedBy && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEvaluatedBy('');
+                          setEvaluatorSearchTerm('');
+                          setIsEvaluatorDropdownOpen(true);
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition"
+                        title="Clear Evaluator"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isEvaluatorDropdownOpen ? 'rotate-180 text-indigo-600' : ''}`} />
+                  </div>
+                </div>
+
+                {/* Dropdown Floating Menu for Evaluator Directory Search */}
+                {isEvaluatorDropdownOpen && (
+                  <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-fade-in max-h-72 flex flex-col">
+                    
+                    {/* Search Input in Dropdown */}
+                    <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                      <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Search Evaluator by ID, Name or Dept..."
+                        value={evaluatorSearchTerm}
+                        onChange={(e) => setEvaluatorSearchTerm(e.target.value)}
+                        className="w-full bg-transparent border-none text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
+                        autoFocus
+                      />
+                      {evaluatorSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setEvaluatorSearchTerm('')}
+                          className="text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Quick Suggestions / Assigned Supervisor */}
+                    {selectedEmployee?.supervisor && (
+                      <div 
+                        onClick={() => {
+                          setEvaluatedBy(selectedEmployee.supervisor!);
+                          setIsEvaluatorDropdownOpen(false);
+                          setEvaluatorSearchTerm('');
+                        }}
+                        className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100/80 cursor-pointer border-b border-indigo-100 flex items-center justify-between transition"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+                          <span className="text-xs font-bold text-indigo-900">
+                            Assigned Supervisor: {selectedEmployee.supervisor}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-200">
+                          Auto-Assigned
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Directory List Items */}
+                    <div className="overflow-y-auto max-h-56 divide-y divide-slate-100">
+                      {searchableEvaluators.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-slate-500">
+                          No matching staff found. You can type a custom evaluator name above.
+                        </div>
+                      ) : (
+                        searchableEvaluators.map((emp) => {
+                          const isSelected = evaluatedBy.toLowerCase() === emp.name.toLowerCase() || evaluatedBy.toLowerCase().includes(emp.id.toLowerCase());
+                          return (
+                            <div
+                              key={`evaluator-${emp.id}`}
+                              onClick={() => {
+                                setEvaluatedBy(`${emp.name} (${emp.id})`);
+                                setIsEvaluatorDropdownOpen(false);
+                                setEvaluatorSearchTerm('');
+                              }}
+                              className={`p-2.5 hover:bg-indigo-50/60 cursor-pointer transition flex items-center justify-between gap-2 ${
+                                isSelected ? 'bg-indigo-50/90' : ''
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold text-[11px] flex items-center justify-center shrink-0 border border-slate-200">
+                                  {emp.name.charAt(0)}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-xs truncate text-slate-900">
+                                      {emp.name}
+                                    </span>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                                      {emp.id}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 flex items-center gap-1 truncate mt-0.5">
+                                    <span>{emp.department || 'General'}</span>
+                                    {emp.designation && <span>• {emp.designation}</span>}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {isSelected && (
+                                <Check className="w-4 h-4 text-indigo-600 shrink-0" />
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Footer Directory Count */}
+                    <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-500 font-medium flex items-center justify-between">
+                      <span>{searchableEvaluators.length} Staff in Directory</span>
+                      <span>Select Evaluator</span>
+                    </div>
+
+                  </div>
+                )}
+              </div>
             </div>
 
           </div>
@@ -318,37 +589,185 @@ export default function EvaluationForm({
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
-              {/* Employee ID Search & Select */}
-              <div className="md:col-span-1">
+              {/* Employee ID Or Name Search & Dropdown */}
+              <div className="md:col-span-1 relative" ref={dropdownRef}>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                  <span>Select Employee ID *</span>
+                  <span>Select Employee ID Or Name *</span>
                   <span className="text-[10px] text-slate-500 font-normal">({employees.length} Staff)</span>
                 </label>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    placeholder="Search by ID, Name or Dept..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                  />
-                  <select
-                    value={selectedEmpId}
-                    onChange={(e) => {
-                      setSelectedEmpId(e.target.value);
-                      const emp = employees.find(x => x.id === e.target.value);
-                      if (emp?.dateOfJoin) setCustomDateJoined(emp.dateOfJoin);
-                    }}
-                    required
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+
+                {/* Combobox Search Trigger */}
+                <div className="relative">
+                  <div 
+                    onClick={() => setIsDropdownOpen(true)}
+                    className={`w-full bg-white border rounded-xl transition-all shadow-2xs flex items-center justify-between px-3 py-2 cursor-pointer ${
+                      isDropdownOpen 
+                        ? 'border-indigo-500 ring-2 ring-indigo-500/20' 
+                        : selectedEmployee 
+                          ? 'border-indigo-300 bg-indigo-50/20' 
+                          : 'border-slate-300 hover:border-slate-400'
+                    }`}
                   >
-                    <option value="">-- Choose Employee --</option>
-                    {searchableEmployees.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.id} - {emp.name} ({emp.department || 'General'})
-                      </option>
-                    ))}
-                  </select>
+                    <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
+                      <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                      {selectedEmployee ? (
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 rounded font-bold text-[10px] shrink-0">
+                            {selectedEmployee.id}
+                          </span>
+                          <span className="font-bold text-xs text-slate-900 truncate">
+                            {selectedEmployee.name}
+                          </span>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Search by ID, Name, Dept..."
+                          value={searchTerm}
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setIsDropdownOpen(true);
+                          }}
+                          onFocus={() => setIsDropdownOpen(true)}
+                          className="w-full bg-transparent border-none p-0 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
+                        />
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {selectedEmployee && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedEmpId('');
+                            setSearchTerm('');
+                            setIsDropdownOpen(true);
+                          }}
+                          className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition"
+                          title="Clear Selection"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180 text-indigo-600' : ''}`} />
+                    </div>
+                  </div>
+
+                  {/* Dropdown Floating Menu as per Employee Directory */}
+                  {isDropdownOpen && (
+                    <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-fade-in max-h-80 flex flex-col">
+                      
+                      {/* Search Filter Header */}
+                      <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                        <Search className="w-3.5 h-3.5 text-slate-400 ml-1 shrink-0" />
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Type to filter directory..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full bg-transparent border-none p-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
+                        />
+                        {searchTerm && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchTerm('')}
+                            className="p-0.5 text-slate-400 hover:text-slate-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Employee List Items */}
+                      <div className="overflow-y-auto divide-y divide-slate-100 flex-1">
+                        {searchableEmployees.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-500 font-medium">
+                            No employees found matching "{searchTerm}".
+                          </div>
+                        ) : (
+                          searchableEmployees.map((emp) => {
+                            const isSelected = emp.id.toLowerCase() === selectedEmpId.toLowerCase();
+                            
+                            // Check if this employee already evaluated for current period
+                            const hasPeriodEval = existingRecords.some(
+                              r => r.employeeId.toLowerCase() === emp.id.toLowerCase() && r.periodKey === selectedPeriodKey
+                            );
+
+                            return (
+                              <div
+                                key={emp.id}
+                                onClick={() => {
+                                  setSelectedEmpId(emp.id);
+                                  if (emp.dateOfJoin) setCustomDateJoined(emp.dateOfJoin);
+                                  setIsDropdownOpen(false);
+                                  setSearchTerm('');
+                                }}
+                                className={`p-2.5 flex items-center justify-between gap-2.5 cursor-pointer transition ${
+                                  isSelected 
+                                    ? 'bg-indigo-50/90 text-indigo-900' 
+                                    : 'hover:bg-slate-50 text-slate-800'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  {/* Avatar Initials */}
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                                    isSelected 
+                                      ? 'bg-indigo-600 text-white' 
+                                      : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                  }`}>
+                                    {emp.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                                  </div>
+
+                                  {/* Info */}
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-xs truncate text-slate-900">
+                                        {emp.name}
+                                      </span>
+                                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                                        {emp.id}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 flex items-center gap-1.5 truncate mt-0.5">
+                                      <span>{emp.department || 'General'}</span>
+                                      {emp.designation && (
+                                        <>
+                                          <span>•</span>
+                                          <span className="truncate">{emp.designation}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Status & Evaluation Badges */}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {hasPeriodEval && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-0.5">
+                                      <Check className="w-2.5 h-2.5" />
+                                      Evaluated
+                                    </span>
+                                  )}
+                                  {isSelected && (
+                                    <Check className="w-4 h-4 text-indigo-600" />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Footer Directory Count */}
+                      <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-500 font-medium flex items-center justify-between">
+                        <span>Showing {searchableEmployees.length} of {employees.length} employees</span>
+                        <span>Employee Directory</span>
+                      </div>
+
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -407,6 +826,76 @@ export default function EvaluationForm({
               </div>
 
             </div>
+
+            {/* MESSAGE BANNER: If selected employee evaluation is already completed / finalized */}
+            {existingEvaluationForPeriod && (
+              <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 text-emerald-950 shadow-xs animate-fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs mt-0.5 shrink-0">
+                      <FileCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-black text-sm text-emerald-950">
+                          Evaluation Completed & Finalized for {currentPeriodLabel}
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-200 text-emerald-900 border border-emerald-300">
+                          ID: {existingEvaluationForPeriod.id}
+                        </span>
+                      </div>
+                      
+                      <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
+                        A performance evaluation for <strong>{selectedEmployee?.name || existingEvaluationForPeriod.employeeName} ({existingEvaluationForPeriod.employeeId})</strong> has already been completed and finalized for <strong>{currentPeriodLabel}</strong> on <strong>{existingEvaluationForPeriod.evaluationDate}</strong> by <strong>{existingEvaluationForPeriod.evaluatedBy}</strong>.
+                      </p>
+
+                      {/* Performance Summary Snapshot */}
+                      <div className="flex flex-wrap items-center gap-2 mt-2.5 pt-2 border-t border-emerald-200/80 text-xs">
+                        <span className="px-2.5 py-1 bg-white rounded-lg font-bold text-emerald-800 border border-emerald-200 shadow-2xs">
+                          Total Score: <strong>{existingEvaluationForPeriod.totalScore} / 50</strong>
+                        </span>
+                        <span className="px-2.5 py-1 bg-white rounded-lg font-bold text-amber-700 border border-amber-200 shadow-2xs flex items-center gap-1">
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                          Rating: <strong>{existingEvaluationForPeriod.averageRating.toFixed(2)} / 5.0</strong>
+                        </span>
+                        <span className="px-2.5 py-1 bg-white rounded-lg font-bold text-emerald-800 border border-emerald-200 shadow-2xs">
+                          Grade: <strong>{existingEvaluationForPeriod.ratingGrade}</strong>
+                        </span>
+                        {existingEvaluationForPeriod.recommendation && (
+                          <span className="px-2.5 py-1 bg-white rounded-lg text-slate-700 border border-emerald-200 shadow-2xs truncate max-w-xs">
+                            Rec: <strong>{existingEvaluationForPeriod.recommendation}</strong>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Button: Load / Edit */}
+                  <button
+                    type="button"
+                    onClick={() => handleLoadExistingEvaluation(existingEvaluationForPeriod)}
+                    className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 shrink-0 self-start"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Load & Edit Record
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Past Evaluations Record Note */}
+            {!existingEvaluationForPeriod && otherEvaluationsForEmployee.length > 0 && (
+              <div className="mt-2 px-3 py-2 bg-indigo-50/60 border border-indigo-100 rounded-lg text-xs text-indigo-900 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  Employee has <strong>{otherEvaluationsForEmployee.length}</strong> previous evaluation record(s) on file in other periods.
+                </span>
+                <span className="text-[11px] text-indigo-700 font-semibold">
+                  Latest: {otherEvaluationsForEmployee[0].period} ({otherEvaluationsForEmployee[0].averageRating.toFixed(2)} ★)
+                </span>
+              </div>
+            )}
+
           </div>
         </div>
 
@@ -495,6 +984,16 @@ export default function EvaluationForm({
           </div>
         </div>
 
+        {/* SECTION 2.5: Official 1-5 Performance Evaluation Rating Scheme */}
+        <PerformanceRatingScheme 
+          collapsible={true}
+          defaultExpanded={true}
+          interactive={true}
+          onSelectPoint={(point) => handleSetAllScores(point)}
+          title="Performance Evaluation Rating Scheme (1 – 5 Rating Scale)"
+          subtitle="Click any Point card below to apply benchmark preset or reference performance standards"
+        />
+
         {/* SECTION 3: 10 Evaluation Points (Each 5 Marks) */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -504,7 +1003,7 @@ export default function EvaluationForm({
                 10-Point Performance Criteria Assessment
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Rate each competency from 1 (Unsatisfactory) to 5 (Outstanding).
+                Rate each competency from 1 (Unsatisfactory) to 5 (Excellent) based on the official rating scheme.
               </p>
             </div>
             <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-100">
@@ -514,15 +1013,19 @@ export default function EvaluationForm({
 
           <div className="space-y-3 pt-2">
             {EVALUATION_CRITERIA_LIST.map((criterion, index) => {
-              const currentVal = scores[criterion.key] || 3;
+              const currentVal = scores[criterion.key] || 0;
               const isRubricOpen = activeRubricCriterion === criterion.id;
 
               return (
                 <div 
                   key={criterion.id}
                   className={`rounded-xl border transition-all p-4 ${
-                    currentVal >= 4 ? 'border-slate-200 bg-white hover:border-indigo-300' :
-                    currentVal === 3 ? 'border-slate-200 bg-slate-50/40' : 'border-amber-200 bg-amber-50/20'
+                    currentVal === 5 ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300' :
+                    currentVal === 4 ? 'border-teal-200 bg-teal-50/20 hover:border-teal-300' :
+                    currentVal === 3 ? 'border-amber-200 bg-amber-50/20 hover:border-amber-300' :
+                    currentVal === 2 ? 'border-rose-200 bg-rose-50/20 hover:border-rose-300' :
+                    currentVal === 1 ? 'border-red-200 bg-red-50/30 hover:border-red-300' :
+                    'border-slate-200 bg-white hover:border-slate-300'
                   }`}
                 >
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -530,7 +1033,9 @@ export default function EvaluationForm({
                     {/* Left: Criteria Title, Description & Number */}
                     <div className="space-y-1 flex-1 pr-2">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-slate-800 text-white font-mono font-bold text-xs flex items-center justify-center shrink-0">
+                        <span className={`w-6 h-6 rounded-full font-mono font-bold text-xs flex items-center justify-center shrink-0 ${
+                          currentVal > 0 ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
                           {criterion.id}
                         </span>
                         <h4 className="font-bold text-sm text-slate-900">
@@ -550,38 +1055,65 @@ export default function EvaluationForm({
                       </p>
                     </div>
 
-                    {/* Right: Interactive 1-5 Rating Selector */}
+                    {/* Right: Interactive 1-5 Rating Selector with Picture 1 Color Coding */}
                     <div className="flex items-center gap-1.5 ml-8 md:ml-0 shrink-0">
-                      {[1, 2, 3, 4, 5].map(mark => (
+                      {[
+                        { val: 1, label: 'Unsatisfactory', short: 'Unsat', color: '#E50914', bg: 'bg-[#E50914]' },
+                        { val: 2, label: 'Below Average', short: 'Below', color: '#FF5A60', bg: 'bg-[#FF5A60]' },
+                        { val: 3, label: 'Average', short: 'Avg', color: '#F7B928', bg: 'bg-[#F7B928]' },
+                        { val: 4, label: 'Good', short: 'Good', color: '#38C1B6', bg: 'bg-[#38C1B6]' },
+                        { val: 5, label: 'Excellent', short: 'Excel', color: '#00A843', bg: 'bg-[#00A843]' },
+                      ].map(item => (
                         <button
-                          key={mark}
+                          key={item.val}
                           type="button"
-                          onClick={() => handleScoreChange(criterion.key, mark)}
-                          className={`w-10 h-10 rounded-xl font-black text-sm transition-all flex flex-col items-center justify-center border ${
-                            currentVal === mark
-                              ? mark === 5 ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm scale-105' :
-                                mark === 4 ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm scale-105' :
-                                mark === 3 ? 'bg-blue-600 text-white border-blue-600 shadow-sm scale-105' :
-                                mark === 2 ? 'bg-amber-600 text-white border-amber-600 shadow-sm scale-105' :
-                                'bg-rose-600 text-white border-rose-600 shadow-sm scale-105'
+                          onClick={() => handleScoreChange(criterion.key, item.val)}
+                          style={currentVal === item.val ? { backgroundColor: item.color, borderColor: item.color } : undefined}
+                          className={`w-11 h-11 rounded-xl font-black text-sm transition-all flex flex-col items-center justify-center border ${
+                            currentVal === item.val
+                              ? 'text-white shadow-sm scale-105'
                               : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                           }`}
                         >
-                          <span>{mark}</span>
-                          <span className="text-[9px] font-normal opacity-80 -mt-1">
-                            {mark === 5 ? 'Exc' : mark === 4 ? 'Good' : mark === 3 ? 'Avg' : mark === 2 ? 'Low' : 'Min'}
+                          <span className="leading-tight">{item.val}</span>
+                          <span className="text-[8px] font-bold tracking-tight opacity-90 -mt-0.5 uppercase">
+                            {item.short}
                           </span>
                         </button>
                       ))}
 
-                      {/* Current Score Tag */}
-                      <div className="ml-2 pl-3 border-l border-slate-200 text-right min-w-[70px]">
-                        <span className="text-xs font-bold text-slate-900 block">
-                          {currentVal} / 5
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-medium">
-                          {currentVal === 5 ? 'Outstanding' : currentVal === 4 ? 'Very Good' : currentVal === 3 ? 'Satisfactory' : currentVal === 2 ? 'Fair' : 'Poor'}
-                        </span>
+                      {/* Current Score Tag / Unselected State */}
+                      <div className="ml-2 pl-3 border-l border-slate-200 text-right min-w-[105px]">
+                        {currentVal > 0 ? (
+                          <>
+                            <span className="text-xs font-bold text-slate-900 block">
+                              Point {currentVal} / 5
+                            </span>
+                            <span 
+                              className="text-[10px] font-bold block"
+                              style={{
+                                color: currentVal === 5 ? '#00A843' :
+                                       currentVal === 4 ? '#0D9488' :
+                                       currentVal === 3 ? '#D97706' :
+                                       currentVal === 2 ? '#FF5A60' : '#E50914'
+                              }}
+                            >
+                              {currentVal === 5 ? 'Excellent' :
+                               currentVal === 4 ? 'Good' :
+                               currentVal === 3 ? 'Average' :
+                               currentVal === 2 ? 'Below Average' : 'Unsatisfactory'}
+                            </span>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              Unselected
+                            </span>
+                            <span className="text-[9px] text-slate-400 mt-0.5">
+                              0 / 5 (Pending)
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -590,18 +1122,33 @@ export default function EvaluationForm({
                   {/* Expandable Rubric Guide */}
                   {isRubricOpen && (
                     <div className="mt-3 pt-3 border-t border-slate-100 text-xs bg-slate-50 rounded-lg p-3 grid grid-cols-1 sm:grid-cols-5 gap-2">
-                      {[1, 2, 3, 4, 5].map((level) => (
+                      {[
+                        { level: 1, label: 'Unsatisfactory', color: '#E50914', lightBg: '#FEF2F2' },
+                        { level: 2, label: 'Below Average', color: '#FF5A60', lightBg: '#FFF1F2' },
+                        { level: 3, label: 'Average', color: '#F7B928', lightBg: '#FFFBEB' },
+                        { level: 4, label: 'Good', color: '#38C1B6', lightBg: '#F0FDFA' },
+                        { level: 5, label: 'Excellent', color: '#00A843', lightBg: '#F0FDF4' }
+                      ].map(({ level, label, color, lightBg }) => (
                         <div 
                           key={level} 
                           onClick={() => handleScoreChange(criterion.key, level)}
-                          className={`p-2 rounded-md cursor-pointer transition border ${
-                            currentVal === level ? 'bg-white border-indigo-400 font-semibold shadow-2xs' : 'border-transparent text-slate-600 hover:bg-white/80'
+                          style={currentVal === level ? { borderColor: color, backgroundColor: lightBg } : undefined}
+                          className={`p-2.5 rounded-lg cursor-pointer transition border ${
+                            currentVal === level ? 'shadow-2xs font-semibold' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'
                           }`}
                         >
-                          <span className="font-bold text-[11px] block text-slate-800">
-                            {level} Mark{level > 1 ? 's' : ''}:
-                          </span>
-                          <p className="text-[10px] text-slate-500 mt-0.5">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span 
+                              className="w-4 h-4 rounded text-white text-[10px] font-black flex items-center justify-center"
+                              style={{ backgroundColor: color }}
+                            >
+                              {level}
+                            </span>
+                            <span className="font-bold text-[11px]" style={{ color }}>
+                              {label}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
                             {criterion.rubric[level as 1 | 2 | 3 | 4 | 5]}
                           </p>
                         </div>

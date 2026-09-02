@@ -4,6 +4,7 @@ export interface Employee {
   designation: string;
   department: string;
   status: string;
+  supervisor?: string;
   profilePicture?: string;
   category?: 'Management' | 'Non-Management' | string;
   dateOfJoin?: string;
@@ -231,6 +232,8 @@ export interface EvaluationScores {
   teamworkRelationship: number;      // 10. Interpersonal Relationship / Teamwork (1-5)
 }
 
+export type EvaluationRatingGrade = 'Outstanding' | 'Exceeds Expectations' | 'Meets Expectations' | 'Needs Improvement' | 'Unsatisfactory' | 'Pending Assessment';
+
 export interface PerformanceEvaluationRecord {
   id: string; // e.g. EVAL-2026-Q1-EMP001
   employeeId: string;
@@ -251,7 +254,7 @@ export interface PerformanceEvaluationRecord {
   totalPossible: number; // 50
   averageRating: number; // Total / 10 (1.00 - 5.00)
   percentage: number; // (Total / 50) * 100
-  ratingGrade: 'Outstanding' | 'Exceeds Expectations' | 'Meets Expectations' | 'Needs Improvement' | 'Unsatisfactory';
+  ratingGrade: EvaluationRatingGrade;
   strengths?: string;
   areasOfImprovement?: string;
   recommendation?: string;
@@ -436,33 +439,53 @@ export function calculateEvaluationSummary(scores: EvaluationScores): {
   totalPossible: number;
   averageRating: number;
   percentage: number;
-  ratingGrade: PerformanceEvaluationRecord['ratingGrade'];
+  ratingGrade: PerformanceEvaluationRecord['ratingGrade'] | 'Pending Assessment';
   gradeColor: string;
   gradeBg: string;
   gradeBadge: string;
+  ratedCount: number;
+  isComplete: boolean;
 } {
-  const sum = 
-    (scores.jobKnowledge || 0) +
-    (scores.quantityOfOutput || 0) +
-    (scores.qualityOfWork || 0) +
-    (scores.attendanceCommitment || 0) +
-    (scores.initiativeImprovement || 0) +
-    (scores.dependability || 0) +
-    (scores.attitude || 0) +
-    (scores.creativityAnalytical || 0) +
-    (scores.communicationSkills || 0) +
-    (scores.teamworkRelationship || 0);
+  const scoreKeys: (keyof EvaluationScores)[] = [
+    'jobKnowledge',
+    'quantityOfOutput',
+    'qualityOfWork',
+    'attendanceCommitment',
+    'initiativeImprovement',
+    'dependability',
+    'attitude',
+    'creativityAnalytical',
+    'communicationSkills',
+    'teamworkRelationship'
+  ];
 
+  let ratedCount = 0;
+  let sum = 0;
+
+  scoreKeys.forEach(k => {
+    const val = Number(scores[k] || 0);
+    if (val > 0) {
+      ratedCount++;
+      sum += val;
+    }
+  });
+
+  const isComplete = ratedCount === 10;
   const totalPossible = 50;
-  const averageRating = Number((sum / 10).toFixed(2));
-  const percentage = Number(((sum / totalPossible) * 100).toFixed(1));
+  const averageRating = ratedCount > 0 ? Number((sum / 10).toFixed(2)) : 0;
+  const percentage = ratedCount > 0 ? Number(((sum / totalPossible) * 100).toFixed(1)) : 0;
 
-  let ratingGrade: PerformanceEvaluationRecord['ratingGrade'] = 'Needs Improvement';
+  let ratingGrade: PerformanceEvaluationRecord['ratingGrade'] | 'Pending Assessment' = 'Needs Improvement';
   let gradeColor = 'text-amber-700';
   let gradeBg = 'bg-amber-50';
   let gradeBadge = 'border-amber-300 text-amber-800 bg-amber-50';
 
-  if (averageRating >= 4.5) {
+  if (ratedCount === 0 || sum === 0) {
+    ratingGrade = 'Pending Assessment';
+    gradeColor = 'text-slate-500';
+    gradeBg = 'bg-slate-100';
+    gradeBadge = 'border-slate-300 text-slate-700 bg-slate-100';
+  } else if (averageRating >= 4.5) {
     ratingGrade = 'Outstanding';
     gradeColor = 'text-emerald-700';
     gradeBg = 'bg-emerald-50';
@@ -497,7 +520,9 @@ export function calculateEvaluationSummary(scores: EvaluationScores): {
     ratingGrade,
     gradeColor,
     gradeBg,
-    gradeBadge
+    gradeBadge,
+    ratedCount,
+    isComplete
   };
 }
 
