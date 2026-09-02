@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   User, Calendar, Clock, Award, Star, CheckCircle2, AlertCircle, 
-  HelpCircle, ChevronRight, Save, RotateCcw, Building, Briefcase, 
+  HelpCircle, ChevronRight, Save, RotateCcw, Building, Building2, Briefcase, 
   Sparkles, Check, Info, ShieldCheck, ArrowRight, Search, ChevronDown, 
-  X, FileCheck, AlertTriangle, ExternalLink
+  X, FileCheck, AlertTriangle, ExternalLink, Target, RefreshCw
 } from 'lucide-react';
 import { 
   Employee, PerformanceEvaluationRecord, EvaluationScores, 
@@ -345,491 +345,308 @@ export default function EvaluationForm({
 
       <form onSubmit={handleSubmit} className="space-y-6">
         
-        {/* SECTION 1: Evaluation Period & Employee Data */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <div>
-              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-indigo-600" />
-                Evaluation Scope & Employee Profile
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Select assessment frequency (Quarterly, Half Yearly, Yearly) and link employee master records.
-              </p>
-            </div>
-
-            {/* Evaluation Frequency Pills */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
-              {(['Quarterly', 'Half Yearly', 'Yearly'] as EvaluationPeriodType[]).map(type => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => {
-                    setEvaluationType(type);
-                    const opt = periodOptions.find(p => p.type === type);
-                    if (opt) setSelectedPeriodKey(opt.periodKey);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                    evaluationType === type
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {/* Period Dropdown */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Evaluation Period
-              </label>
-              <select
-                value={selectedPeriodKey}
-                onChange={(e) => setSelectedPeriodKey(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-              >
-                {filteredPeriods.map(p => (
-                  <option key={p.periodKey} value={p.periodKey}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Evaluation Date */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Evaluation Date
-              </label>
-              <input
-                type="date"
-                value={evaluationDate}
-                onChange={(e) => setEvaluationDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-              >
-              </input>
-            </div>
-
-            {/* Evaluator / Supervisor (Searchable Dropdown as per Employee Directory) */}
-            <div className="sm:col-span-2 relative" ref={evaluatorDropdownRef}>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                <span>Evaluator / Supervisor Name *</span>
-                {selectedEmployee?.supervisor && (
-                  <span className="text-[10px] text-indigo-600 font-medium">
-                    Assigned: {selectedEmployee.supervisor}
-                  </span>
-                )}
-              </label>
-
-              {/* Evaluator Combobox / Search Trigger */}
-              <div className="relative">
-                <div 
-                  onClick={() => setIsEvaluatorDropdownOpen(true)}
-                  className={`w-full bg-white border rounded-xl transition-all shadow-2xs flex items-center justify-between px-3 py-2 cursor-pointer ${
-                    isEvaluatorDropdownOpen 
-                      ? 'border-indigo-500 ring-2 ring-indigo-500/20' 
-                      : evaluatedBy 
-                        ? 'border-slate-300 bg-slate-50/50' 
-                        : 'border-slate-300 hover:border-slate-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-                    <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                    <input
-                      type="text"
-                      value={evaluatedBy}
-                      onChange={(e) => {
-                        setEvaluatedBy(e.target.value);
-                        setEvaluatorSearchTerm(e.target.value);
-                        setIsEvaluatorDropdownOpen(true);
-                      }}
-                      onFocus={() => setIsEvaluatorDropdownOpen(true)}
-                      placeholder="Search ID, Name or type evaluator..."
-                      className="w-full bg-transparent border-none p-0 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-hidden"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    {evaluatedBy && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEvaluatedBy('');
-                          setEvaluatorSearchTerm('');
-                          setIsEvaluatorDropdownOpen(true);
-                        }}
-                        className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition"
-                        title="Clear Evaluator"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isEvaluatorDropdownOpen ? 'rotate-180 text-indigo-600' : ''}`} />
-                  </div>
-                </div>
-
-                {/* Dropdown Floating Menu for Evaluator Directory Search */}
-                {isEvaluatorDropdownOpen && (
-                  <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-fade-in max-h-72 flex flex-col">
-                    
-                    {/* Search Input in Dropdown */}
-                    <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-                      <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <input
-                        type="text"
-                        placeholder="Search Evaluator by ID, Name or Dept..."
-                        value={evaluatorSearchTerm}
-                        onChange={(e) => setEvaluatorSearchTerm(e.target.value)}
-                        className="w-full bg-transparent border-none text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
-                        autoFocus
-                      />
-                      {evaluatorSearchTerm && (
-                        <button
-                          type="button"
-                          onClick={() => setEvaluatorSearchTerm('')}
-                          className="text-slate-400 hover:text-slate-600"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Quick Suggestions / Assigned Supervisor */}
-                    {selectedEmployee?.supervisor && (
-                      <div 
-                        onClick={() => {
-                          setEvaluatedBy(selectedEmployee.supervisor!);
-                          setIsEvaluatorDropdownOpen(false);
-                          setEvaluatorSearchTerm('');
-                        }}
-                        className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100/80 cursor-pointer border-b border-indigo-100 flex items-center justify-between transition"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-                          <span className="text-xs font-bold text-indigo-900">
-                            Assigned Supervisor: {selectedEmployee.supervisor}
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-200">
-                          Auto-Assigned
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Directory List Items */}
-                    <div className="overflow-y-auto max-h-56 divide-y divide-slate-100">
-                      {searchableEvaluators.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-slate-500">
-                          No matching staff found. You can type a custom evaluator name above.
-                        </div>
-                      ) : (
-                        searchableEvaluators.map((emp) => {
-                          const isSelected = evaluatedBy.toLowerCase() === emp.name.toLowerCase() || evaluatedBy.toLowerCase().includes(emp.id.toLowerCase());
-                          return (
-                            <div
-                              key={`evaluator-${emp.id}`}
-                              onClick={() => {
-                                setEvaluatedBy(`${emp.name} (${emp.id})`);
-                                setIsEvaluatorDropdownOpen(false);
-                                setEvaluatorSearchTerm('');
-                              }}
-                              className={`p-2.5 hover:bg-indigo-50/60 cursor-pointer transition flex items-center justify-between gap-2 ${
-                                isSelected ? 'bg-indigo-50/90' : ''
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold text-[11px] flex items-center justify-center shrink-0 border border-slate-200">
-                                  {emp.name.charAt(0)}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-bold text-xs truncate text-slate-900">
-                                      {emp.name}
-                                    </span>
-                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
-                                      {emp.id}
-                                    </span>
-                                  </div>
-                                  <div className="text-[11px] text-slate-500 flex items-center gap-1 truncate mt-0.5">
-                                    <span>{emp.department || 'General'}</span>
-                                    {emp.designation && <span>• {emp.designation}</span>}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {isSelected && (
-                                <Check className="w-4 h-4 text-indigo-600 shrink-0" />
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-
-                    {/* Footer Directory Count */}
-                    <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-500 font-medium flex items-center justify-between">
-                      <span>{searchableEvaluators.length} Staff in Directory</span>
-                      <span>Select Evaluator</span>
-                    </div>
-
-                  </div>
-                )}
+        {/* SECTION 1: Header Banner & Employee Profile Auto-Retrieve */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-2xs overflow-hidden">
+          {/* Header Banner matching KPI Individual Entry */}
+          <div className="bg-[#2A3F54] text-white p-5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-white/10 rounded-lg backdrop-blur-xs">
+                <Target className="w-5 h-5 text-[#26B99A]" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm">Individual Employee Performance Evaluation</h4>
+                <p className="text-xs text-gray-300">Name & Department are auto-fetched from the master database</p>
               </div>
             </div>
-
+            {existingEvaluationForPeriod ? (
+              <span className="bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" />
+                Evaluation On File ({currentPeriodLabel})
+              </span>
+            ) : initialData ? (
+              <span className="bg-amber-400/20 text-amber-300 border border-amber-400/30 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Editing Record: {initialData.id}
+              </span>
+            ) : null}
           </div>
 
-          {/* Employee Selection & Auto-fill Card */}
-          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
-              {/* Employee ID Or Name Search & Dropdown */}
-              <div className="md:col-span-1 relative" ref={dropdownRef}>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                  <span>Select Employee ID Or Name *</span>
-                  <span className="text-[10px] text-slate-500 font-normal">({employees.length} Staff)</span>
+          <div className="p-6 space-y-6">
+            {/* Step 1: Employee Selection with Auto-Retrieve */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-6 border-b border-gray-100">
+              {/* Employee ID Selector */}
+              <div className="relative" ref={dropdownRef}>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  1. Employee ID <span className="text-rose-500">*</span>
                 </label>
-
-                {/* Combobox Search Trigger */}
                 <div className="relative">
-                  <div 
-                    onClick={() => setIsDropdownOpen(true)}
-                    className={`w-full bg-white border rounded-xl transition-all shadow-2xs flex items-center justify-between px-3 py-2 cursor-pointer ${
-                      isDropdownOpen 
-                        ? 'border-indigo-500 ring-2 ring-indigo-500/20' 
-                        : selectedEmployee 
-                          ? 'border-indigo-300 bg-indigo-50/20' 
-                          : 'border-slate-300 hover:border-slate-400'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-                      <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                      {selectedEmployee ? (
-                        <div className="flex items-center gap-2 truncate">
-                          <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 rounded font-bold text-[10px] shrink-0">
-                            {selectedEmployee.id}
-                          </span>
-                          <span className="font-bold text-xs text-slate-900 truncate">
-                            {selectedEmployee.name}
-                          </span>
-                        </div>
-                      ) : (
-                        <input
-                          type="text"
-                          placeholder="Search by ID, Name, Dept..."
-                          value={searchTerm}
-                          onChange={(e) => {
-                            setSearchTerm(e.target.value);
-                            setIsDropdownOpen(true);
-                          }}
-                          onFocus={() => setIsDropdownOpen(true)}
-                          className="w-full bg-transparent border-none p-0 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
-                        />
-                      )}
-                    </div>
+                  <input
+                    type="text"
+                    placeholder="Search or Select ID..."
+                    value={selectedEmpId}
+                    onChange={e => {
+                      setSelectedEmpId(e.target.value);
+                      setSearchTerm(e.target.value);
+                      setIsDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    className="w-full pl-9 pr-3 py-2 text-xs font-mono font-bold bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#26B99A] focus:border-transparent uppercase"
+                    required
+                  />
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      {selectedEmployee && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedEmpId('');
-                            setSearchTerm('');
-                            setIsDropdownOpen(true);
-                          }}
-                          className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition"
-                          title="Clear Selection"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180 text-indigo-600' : ''}`} />
-                    </div>
-                  </div>
-
-                  {/* Dropdown Floating Menu as per Employee Directory */}
-                  {isDropdownOpen && (
-                    <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-fade-in max-h-80 flex flex-col">
-                      
-                      {/* Search Filter Header */}
-                      <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-                        <Search className="w-3.5 h-3.5 text-slate-400 ml-1 shrink-0" />
-                        <input
-                          type="text"
-                          autoFocus
-                          placeholder="Type to filter directory..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full bg-transparent border-none p-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
-                        />
-                        {searchTerm && (
-                          <button
-                            type="button"
-                            onClick={() => setSearchTerm('')}
-                            className="p-0.5 text-slate-400 hover:text-slate-600"
+                {/* Dropdown Options */}
+                {isDropdownOpen && (
+                  <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto custom-scrollbar">
+                    {searchableEmployees.length === 0 ? (
+                      <div className="p-3 text-xs text-gray-400 text-center">
+                        No matching employee found in master database
+                      </div>
+                    ) : (
+                      searchableEmployees.map((emp, idx) => {
+                        const hasPeriodEval = existingRecords.some(
+                          r => r.employeeId.toLowerCase() === emp.id.toLowerCase() && r.periodKey === selectedPeriodKey
+                        );
+                        return (
+                          <div
+                            key={`${emp.id}-${idx}`}
+                            onClick={() => {
+                              setSelectedEmpId(emp.id);
+                              setSearchTerm('');
+                              if (emp.dateOfJoin) setCustomDateJoined(emp.dateOfJoin);
+                              setIsDropdownOpen(false);
+                            }}
+                            className="px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer border-b border-gray-50 flex items-center justify-between group"
                           >
-                            <X className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Employee List Items */}
-                      <div className="overflow-y-auto divide-y divide-slate-100 flex-1">
-                        {searchableEmployees.length === 0 ? (
-                          <div className="p-4 text-center text-xs text-slate-500 font-medium">
-                            No employees found matching "{searchTerm}".
-                          </div>
-                        ) : (
-                          searchableEmployees.map((emp) => {
-                            const isSelected = emp.id.toLowerCase() === selectedEmpId.toLowerCase();
-                            
-                            // Check if this employee already evaluated for current period
-                            const hasPeriodEval = existingRecords.some(
-                              r => r.employeeId.toLowerCase() === emp.id.toLowerCase() && r.periodKey === selectedPeriodKey
-                            );
-
-                            return (
-                              <div
-                                key={emp.id}
-                                onClick={() => {
-                                  setSelectedEmpId(emp.id);
-                                  if (emp.dateOfJoin) setCustomDateJoined(emp.dateOfJoin);
-                                  setIsDropdownOpen(false);
-                                  setSearchTerm('');
-                                }}
-                                className={`p-2.5 flex items-center justify-between gap-2.5 cursor-pointer transition ${
-                                  isSelected 
-                                    ? 'bg-indigo-50/90 text-indigo-900' 
-                                    : 'hover:bg-slate-50 text-slate-800'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  {/* Avatar Initials */}
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                                    isSelected 
-                                      ? 'bg-indigo-600 text-white' 
-                                      : 'bg-slate-100 text-slate-700 border border-slate-200'
-                                  }`}>
-                                    {emp.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
-                                  </div>
-
-                                  {/* Info */}
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="font-bold text-xs truncate text-slate-900">
-                                        {emp.name}
-                                      </span>
-                                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
-                                        {emp.id}
-                                      </span>
-                                    </div>
-                                    <div className="text-[11px] text-slate-500 flex items-center gap-1.5 truncate mt-0.5">
-                                      <span>{emp.department || 'General'}</span>
-                                      {emp.designation && (
-                                        <>
-                                          <span>•</span>
-                                          <span className="truncate">{emp.designation}</span>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Status & Evaluation Badges */}
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {hasPeriodEval && (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-0.5">
-                                      <Check className="w-2.5 h-2.5" />
-                                      Evaluated
-                                    </span>
-                                  )}
-                                  {isSelected && (
-                                    <Check className="w-4 h-4 text-indigo-600" />
-                                  )}
-                                </div>
+                            <div>
+                              <div className="font-bold text-gray-800 group-hover:text-[#26B99A] flex items-center gap-1.5">
+                                <span>{emp.name}</span>
+                                {hasPeriodEval && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    Evaluated
+                                  </span>
+                                )}
                               </div>
-                            );
-                          })
-                        )}
-                      </div>
+                              <div className="text-[11px] text-gray-400">{emp.department} • {emp.designation}</div>
+                            </div>
+                            <span className="font-mono font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded text-[11px]">
+                              {emp.id}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
 
-                      {/* Footer Directory Count */}
-                      <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-500 font-medium flex items-center justify-between">
-                        <span>Showing {searchableEmployees.length} of {employees.length} employees</span>
-                        <span>Employee Directory</span>
-                      </div>
-
-                    </div>
-                  )}
+              {/* Auto Retrieved: Employee Name */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  Employee Name (Auto)
+                </label>
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700">
+                  <User className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="truncate">{selectedEmployee ? selectedEmployee.name : '— Select ID above —'}</span>
                 </div>
               </div>
 
-              {/* Employee Information Display / Verification */}
-              <div className="md:col-span-2 bg-white rounded-xl p-3.5 border border-slate-200 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <span className="text-[11px] text-slate-500 block font-medium">Employee Name:</span>
-                  <strong className="text-slate-900 text-sm font-bold block truncate">
-                    {selectedEmployee?.name || initialData?.employeeName || '—'}
-                  </strong>
+              {/* Auto Retrieved: Department */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  Department (Auto)
+                </label>
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700">
+                  <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="truncate">{selectedEmployee ? selectedEmployee.department : '— Select ID above —'}</span>
                 </div>
+              </div>
+            </div>
 
-                <div>
-                  <span className="text-[11px] text-slate-500 block font-medium">Designation:</span>
-                  <strong className="text-slate-800 block truncate">
-                    {selectedEmployee?.designation || initialData?.designation || '—'}
-                  </strong>
+            {/* Secondary Profile Row: Designation, Date Joined, Year of Service, Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pb-6 border-b border-gray-100">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  Designation (Auto)
+                </label>
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700">
+                  <Briefcase className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="truncate">{selectedEmployee ? (selectedEmployee.designation || 'General Staff') : '— Select ID above —'}</span>
                 </div>
+              </div>
 
-                <div>
-                  <span className="text-[11px] text-slate-500 block font-medium">Department:</span>
-                  <strong className="text-slate-800 block truncate">
-                    {selectedEmployee?.department || initialData?.department || '—'}
-                  </strong>
-                </div>
-
-                {/* Date Joined */}
-                <div>
-                  <span className="text-[11px] text-slate-500 block font-medium">Date Joined:</span>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  Date Joined
+                </label>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700">
+                  <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
                   <input
                     type="date"
                     value={customDateJoined}
                     onChange={(e) => setCustomDateJoined(e.target.value)}
-                    className="mt-0.5 w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs font-semibold text-slate-800"
+                    className="w-full bg-transparent border-none text-xs font-bold text-gray-800 p-0 focus:outline-none"
                   />
                 </div>
+              </div>
 
-                {/* Year of Service */}
-                <div>
-                  <span className="text-[11px] text-slate-500 block font-medium">Year of Service:</span>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  Year of Service
+                </label>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700">
+                  <Clock className="w-4 h-4 text-gray-400 shrink-0" />
                   <input
                     type="text"
                     value={customYearOfService}
                     onChange={(e) => setCustomYearOfService(e.target.value)}
-                    placeholder="e.g. 3.5 Years"
-                    className="mt-0.5 w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs font-semibold text-slate-800"
+                    placeholder="e.g. 2.5 Years"
+                    className="w-full bg-transparent border-none text-xs font-bold text-gray-800 p-0 focus:outline-none"
                   />
-                </div>
-
-                <div>
-                  <span className="text-[11px] text-slate-500 block font-medium">Status:</span>
-                  <span className="inline-block mt-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full font-bold text-[10px]">
-                    {selectedEmployee?.status || 'Active Staff'}
-                  </span>
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  Employment Status
+                </label>
+                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700">
+                  <span>{selectedEmployee ? (selectedEmployee.status || 'Active') : '—'}</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                    Verified
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* MESSAGE BANNER: If selected employee evaluation is already completed / finalized */}
+            {/* Step 2: Evaluation Scope, Period & Evaluator */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pb-6 border-b border-gray-100">
+              {/* Frequency */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  2. Assessment Frequency <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex items-center bg-gray-100 p-1 rounded-lg gap-1 border border-gray-200">
+                  {(['Quarterly', 'Half Yearly', 'Yearly'] as EvaluationPeriodType[]).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => {
+                        setEvaluationType(type);
+                        const opt = periodOptions.find(p => p.type === type);
+                        if (opt) setSelectedPeriodKey(opt.periodKey);
+                      }}
+                      className={`flex-1 py-1 rounded text-xs font-bold transition text-center ${
+                        evaluationType === type
+                          ? 'bg-[#2A3F54] text-white shadow-xs'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      {type === 'Half Yearly' ? 'Half-Year' : type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Evaluation Period */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  Evaluation Period <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedPeriodKey}
+                    onChange={(e) => setSelectedPeriodKey(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs font-bold bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#26B99A]"
+                  >
+                    {filteredPeriods.map(p => (
+                      <option key={p.periodKey} value={p.periodKey}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                  <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Evaluation Date */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5">
+                  Assessment Date <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={evaluationDate}
+                  onChange={(e) => setEvaluationDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs font-bold bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#26B99A]"
+                  required
+                />
+              </div>
+
+              {/* Evaluator / Supervisor Name */}
+              <div className="relative" ref={evaluatorDropdownRef}>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center justify-between">
+                  <span>Evaluator / Supervisor <span className="text-rose-500">*</span></span>
+                  {selectedEmployee?.supervisor && (
+                    <span className="text-[10px] text-[#26B99A] font-bold lowercase">
+                      auto-assigned
+                    </span>
+                  )}
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={evaluatedBy}
+                    onChange={(e) => {
+                      setEvaluatedBy(e.target.value);
+                      setEvaluatorSearchTerm(e.target.value);
+                      setIsEvaluatorDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsEvaluatorDropdownOpen(true)}
+                    placeholder="Search Evaluator or Type..."
+                    className="w-full pl-9 pr-3 py-2 text-xs font-bold bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#26B99A]"
+                    required
+                  />
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                </div>
+
+                {/* Dropdown for Evaluator Directory */}
+                {isEvaluatorDropdownOpen && (
+                  <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto custom-scrollbar">
+                    {searchableEvaluators.length === 0 ? (
+                      <div className="p-3 text-xs text-gray-400 text-center">
+                        No matching staff found in directory
+                      </div>
+                    ) : (
+                      searchableEvaluators.map((emp, idx) => (
+                        <div
+                          key={`evaluator-${emp.id}-${idx}`}
+                          onClick={() => {
+                            setEvaluatedBy(`${emp.name} (${emp.id})`);
+                            setIsEvaluatorDropdownOpen(false);
+                            setEvaluatorSearchTerm('');
+                          }}
+                          className="px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer border-b border-gray-50 flex items-center justify-between group"
+                        >
+                          <div>
+                            <div className="font-bold text-gray-800 group-hover:text-[#26B99A]">{emp.name}</div>
+                            <div className="text-[11px] text-gray-400">{emp.department} • {emp.designation}</div>
+                          </div>
+                          <span className="font-mono font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded text-[11px]">
+                            {emp.id}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Completed Evaluation Notice Banner */}
             {existingEvaluationForPeriod && (
-              <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 text-emerald-950 shadow-xs animate-fade-in">
+              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 shadow-xs animate-fade-in">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs mt-0.5 shrink-0">
@@ -885,7 +702,7 @@ export default function EvaluationForm({
 
             {/* Past Evaluations Record Note */}
             {!existingEvaluationForPeriod && otherEvaluationsForEmployee.length > 0 && (
-              <div className="mt-2 px-3 py-2 bg-indigo-50/60 border border-indigo-100 rounded-lg text-xs text-indigo-900 flex items-center justify-between">
+              <div className="px-3 py-2 bg-indigo-50/60 border border-indigo-100 rounded-lg text-xs text-indigo-900 flex items-center justify-between">
                 <span className="flex items-center gap-1.5 font-medium">
                   <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                   Employee has <strong>{otherEvaluationsForEmployee.length}</strong> previous evaluation record(s) on file in other periods.
@@ -895,7 +712,6 @@ export default function EvaluationForm({
                 </span>
               </div>
             )}
-
           </div>
         </div>
 
