@@ -233,13 +233,31 @@ export function hasNavigatorAccess(
   }
 
   const navigator = typeof navigatorIdOrObj === 'string'
-    ? DEFAULT_SYSTEM_NAVIGATORS.find(n => n.id === navigatorIdOrObj || n.name.toLowerCase() === navigatorIdOrObj.toLowerCase())
+    ? (DEFAULT_SYSTEM_NAVIGATORS.find(n => n.id === navigatorIdOrObj || n.name.toLowerCase() === navigatorIdOrObj.toLowerCase()) ||
+       getSystemNavigators().find(n => n.id === navigatorIdOrObj || n.name.toLowerCase() === navigatorIdOrObj.toLowerCase()))
     : navigatorIdOrObj;
 
   if (!navigator) return false;
 
   if (navigator.moduleName === 'All') return true;
-  return accessLevels.includes(navigator.moduleName);
+  if (accessLevels.includes(navigator.moduleName)) return true;
+
+  // Check user additional access layer
+  if (userScope?.username) {
+    try {
+      const rawAdd = localStorage.getItem(`erp_user_additional_access_${userScope.username.toLowerCase()}`);
+      if (rawAdd) {
+        const addMap = JSON.parse(rawAdd);
+        const navId = navigator.id.toLowerCase();
+        const addRec = addMap[navId] || Object.values(addMap).find((r: any) => r.navigatorId?.toLowerCase() === navId);
+        if (addRec && addRec.status !== 'Inactive' && (addRec.canView || addRec.canEdit)) {
+          return true;
+        }
+      }
+    } catch (_) {}
+  }
+
+  return false;
 }
 
 // Find a navigator object by ID or Name

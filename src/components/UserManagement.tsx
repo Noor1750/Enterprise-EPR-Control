@@ -13,6 +13,7 @@ import GoogleDriveSettings from './settings/GoogleDriveSettings';
 import ERPSettings from './settings/ERPSettings';
 import UserAccessSummaryModal from './security/UserAccessSummaryModal';
 import AccessMatrixTab from './security/AccessMatrixTab';
+import AdditionalAccessControlsTab from './security/AdditionalAccessControlsTab';
 import AccessNotSetTab from './security/AccessNotSetTab';
 import PermissionConflictsTab from './security/PermissionConflictsTab';
 import RoleComparisonModal from './security/RoleComparisonModal';
@@ -36,7 +37,7 @@ interface UserManagementProps {
   spreadsheetId: string;
   user?: any;
   userSecurityScope?: UserSecurityScope;
-  initialTab?: 'users' | 'access' | 'accessNotSet' | 'conflicts' | 'navigator' | 'supervisors' | 'assignSupervisor' | 'holidays' | 'database';
+  initialTab?: 'users' | 'access' | 'additionalAccess' | 'accessNotSet' | 'conflicts' | 'navigator' | 'supervisors' | 'assignSupervisor' | 'holidays' | 'database' | 'erpSettings';
 }
 
 const TAB_MODULES = [
@@ -87,7 +88,8 @@ export default function UserManagement({ spreadsheetId, user, userSecurityScope,
   const [supervisors, setSupervisors] = useState<string[][]>([]);
   const [employees, setEmployees] = useState<string[][]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'access' | 'accessNotSet' | 'conflicts' | 'navigator' | 'supervisors' | 'assignSupervisor' | 'holidays' | 'database' | 'erpSettings'>(initialTab || 'users');
+  const [activeTab, setActiveTab] = useState<'users' | 'access' | 'additionalAccess' | 'accessNotSet' | 'conflicts' | 'navigator' | 'supervisors' | 'assignSupervisor' | 'holidays' | 'database' | 'erpSettings'>(initialTab || 'users');
+  const [preselectedAdditionalUserEmail, setPreselectedAdditionalUserEmail] = useState<string>('');
   
   // Security Modal States
   const [showAccessSummaryModal, setShowAccessSummaryModal] = useState(false);
@@ -766,6 +768,18 @@ export default function UserManagement({ spreadsheetId, user, userSecurityScope,
         </button>
 
         <button
+          onClick={() => setActiveTab('additionalAccess')}
+          className={`py-2.5 px-4 text-xs font-bold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'additionalAccess'
+              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/40'
+              : 'border-transparent text-slate-500 hover:text-indigo-600'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-indigo-600" />
+          Additional Access Controls
+        </button>
+
+        <button
           onClick={() => setActiveTab('accessNotSet')}
           className={`py-2.5 px-4 text-xs font-bold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
             activeTab === 'accessNotSet'
@@ -1036,6 +1050,16 @@ export default function UserManagement({ spreadsheetId, user, userSecurityScope,
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => {
+                              setPreselectedAdditionalUserEmail(row[0] || '');
+                              setActiveTab('additionalAccess');
+                            }}
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                            title="Configure Additional Access Controls"
+                          >
+                            <Sliders className="w-4 h-4 text-indigo-600" />
+                          </button>
+                          <button
+                            onClick={() => {
                               setSummaryUserScope(scope);
                               setShowAccessSummaryModal(true);
                             }}
@@ -1087,6 +1111,17 @@ export default function UserManagement({ spreadsheetId, user, userSecurityScope,
             setSummaryUserScope(scope);
             setShowAccessSummaryModal(true);
           }}
+        />
+      ) : activeTab === 'additionalAccess' ? (
+        /* TAB: USER-WISE ADDITIONAL ACCESS CONTROLS */
+        <AdditionalAccessControlsTab
+          users={users}
+          employees={employees}
+          adminUser={user}
+          userSecurityScope={userSecurityScope}
+          spreadsheetId={spreadsheetId}
+          onRefresh={loadData}
+          preselectedUserEmail={preselectedAdditionalUserEmail}
         />
       ) : activeTab === 'accessNotSet' ? (
         /* TAB: ⚠️ ACCESS NOT SET SCANNER */

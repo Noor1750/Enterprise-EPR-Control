@@ -372,6 +372,13 @@ const DEFAULT_LOCAL_DB: Record<string, string[][]> = {
       '5S-AUD-001', '2026-08-15T10:00:00.000Z', '2026-08-15', '10:00:00', 'ADMIN-001', 'Md. Noor Alam',
       'Admin', 'Assessment Approved', 'Assessment', '5S-2026-08-001', 'Approved 5S assessment for EMP001 (John Doe) with score 95% (Excellent).'
     ]
+  ],
+  UserAdditionalAccess: [
+    [
+      'User_ID', 'Employee_ID', 'User_Name', 'Navigator_ID', 'Navigator_Name', 
+      'View_Permission', 'Edit_Permission', 'Assigned_By', 'Assigned_Date', 
+      'Updated_By', 'Updated_Date', 'Status'
+    ]
   ]
 };
 
@@ -545,6 +552,7 @@ export async function createSpreadsheet(): Promise<string> {
       { range: 'FiveS_CorrectiveActions!A1:U3', values: DEFAULT_LOCAL_DB.FiveS_CorrectiveActions },
       { range: 'FiveS_Winners!A1:O4', values: DEFAULT_LOCAL_DB.FiveS_Winners },
       { range: 'FiveS_AuditLog!A1:K2', values: DEFAULT_LOCAL_DB.FiveS_AuditLog },
+      { range: 'UserAdditionalAccess!A1:L1', values: DEFAULT_LOCAL_DB.UserAdditionalAccess },
     ];
 
     for (const header of headers) {

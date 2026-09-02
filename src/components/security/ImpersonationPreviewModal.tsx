@@ -31,7 +31,7 @@ export default function ImpersonationPreviewModal({
     const valid = (users || [])
       .filter(u => Array.isArray(u) && u.length > 0 && u[0] && String(u[0]).trim() !== '' && String(u[0]).toLowerCase() !== 'gmail id' && String(u[0]).toLowerCase() !== 'username')
       .map(u => parseUserSecurityScope(u))
-      .filter(u => Boolean(u && u.username));
+      .filter((u): u is UserSecurityScope => Boolean(u && u.username));
 
     if (valid.length === 0) {
       return [DEFAULT_ADMIN_SCOPE];
@@ -39,11 +39,12 @@ export default function ImpersonationPreviewModal({
     return valid;
   }, [users]);
 
-  const [selectedUserEmail, setSelectedUserEmail] = useState<string>(parsedUsers[0]?.username || DEFAULT_ADMIN_SCOPE.username);
+  const [selectedUserEmail, setSelectedUserEmail] = useState<string>(() => parsedUsers[0]?.username || DEFAULT_ADMIN_SCOPE.username);
   const [activeTab, setActiveTab] = useState<'navigation' | 'matrix' | 'scope'>('navigation');
 
-  const selectedScope = useMemo(() => {
-    return parsedUsers.find(u => u.username.toLowerCase() === selectedUserEmail.toLowerCase()) || parsedUsers[0] || DEFAULT_ADMIN_SCOPE;
+  const selectedScope: UserSecurityScope = useMemo(() => {
+    const found = parsedUsers.find(u => u && u.username && u.username.toLowerCase() === (selectedUserEmail || '').toLowerCase());
+    return found || parsedUsers[0] || DEFAULT_ADMIN_SCOPE;
   }, [parsedUsers, selectedUserEmail]);
 
   const allNavItems = [

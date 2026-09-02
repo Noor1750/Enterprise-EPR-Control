@@ -361,7 +361,7 @@ export function parseUserSecurityScope(row: string[] | undefined, currentUserEma
 
 export interface EffectivePermissionResult {
   allowed: boolean;
-  source: 'Admin Full Control' | 'User Override' | 'Explicit Deny' | 'Role Default' | 'System Default';
+  source: 'Admin Full Control' | 'Additional Access' | 'User Override' | 'Explicit Deny' | 'Role Default' | 'System Default';
   scope: ScopeType;
   permissionType: PermissionType;
   moduleKey: string;
@@ -369,7 +369,7 @@ export interface EffectivePermissionResult {
 
 /**
  * Calculates user-wise effective access for a specific module and action.
- * Priority: Admin Override -> User Override / Deny -> Role Permission -> System Default
+ * Priority: Admin Override -> Additional Access Extension -> User Override / Deny -> Role Permission -> System Default
  */
 export function calculateEffectiveUserPermissions(
   scope: UserSecurityScope | null | undefined,
@@ -383,6 +383,26 @@ export function calculateEffectiveUserPermissions(
   // 1. Admin Full Control
   if (scope.isAdmin) {
     return { allowed: true, source: 'Admin Full Control', scope: 'All Data', permissionType: action, moduleKey };
+  }
+
+  // 1b. Check User Additional Access (Adds additional permissions on top of baseline)
+  if (scope.username) {
+    try {
+      const rawAdd = localStorage.getItem(`erp_user_additional_access_${scope.username.toLowerCase()}`);
+      if (rawAdd) {
+        const addMap = JSON.parse(rawAdd);
+        const cleanMod = moduleKey.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const addRec = addMap[cleanMod] || addMap[moduleKey.toLowerCase()] || Object.values(addMap).find((r: any) => r.navigatorId?.toLowerCase() === cleanMod);
+        if (addRec && addRec.status !== 'Inactive') {
+          if (action === 'view' && (addRec.canView || addRec.canEdit)) {
+            return { allowed: true, source: 'Additional Access', scope: 'All Data', permissionType: action, moduleKey };
+          }
+          if (['edit', 'create', 'delete', 'assign'].includes(action) && addRec.canEdit) {
+            return { allowed: true, source: 'Additional Access', scope: 'All Data', permissionType: action, moduleKey };
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   const roleKey = scope.role || 'User';
