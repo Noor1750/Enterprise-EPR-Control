@@ -2,8 +2,8 @@ import { getRange, appendRow, updateRowByPrimaryKey, deleteRowByPrimaryKey } fro
 
 export interface DeveloperProfile {
   name: string;
-  rolePrefix: string; // e.g. "im john moore,"
-  roleHighlight: string; // e.g. "a digital designer"
+  rolePrefix: string; // e.g. "Hello, I'm"
+  roleHighlight: string; // e.g. "Full Stack Developer"
   bio: string;
   avatarUrl: string;
   email: string;
@@ -12,11 +12,53 @@ export interface DeveloperProfile {
   availability: string;
   githubUrl?: string;
   linkedinUrl?: string;
+  twitterUrl?: string;
+  mediumUrl?: string;
   dribbbleUrl?: string;
   websiteUrl?: string;
+  cvUrl?: string;
   yearsExperience?: number;
   completedProjects?: number;
+  happyClients?: number;
+  technologiesCount?: number;
   clientSatisfaction?: number;
+}
+
+export interface SkillCategory {
+  category: string;
+  iconName: string;
+  skills: {
+    name: string;
+    level: number; // 1-100
+    experience: string;
+    icon?: string;
+    featured?: boolean;
+  }[];
+}
+
+export interface ExperienceTimelineItem {
+  id: string;
+  role: string;
+  company: string;
+  location: string;
+  period: string;
+  type: 'Full-time' | 'Contract' | 'Lead';
+  description: string;
+  achievements: string[];
+  techStack: string[];
+}
+
+export interface BlogPostItem {
+  id: string;
+  title: string;
+  category: string;
+  readTime: string;
+  date: string;
+  excerpt: string;
+  coverImage: string;
+  tags: string[];
+  author: string;
+  content: string;
 }
 
 export interface ExpertiseItem {
@@ -29,6 +71,165 @@ export interface ExpertiseItem {
   accentColor?: string;
 }
 
+export const DEFAULT_DEVELOPER_PROFILE: DeveloperProfile = {
+  name: 'Alex Morgan',
+  rolePrefix: "Hello, I'm",
+  roleHighlight: 'Full Stack Developer',
+  bio: 'I build exceptional digital experiences that are fast, accessible, visually appealing and responsive. Let\'s build something amazing together!',
+  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=900&q=80',
+  email: 'alex.morgan@devstudio.io',
+  phone: '+1 (555) 349-8201',
+  location: 'San Francisco, CA / Global Remote',
+  availability: 'Available for new projects',
+  githubUrl: 'https://github.com',
+  linkedinUrl: 'https://linkedin.com',
+  twitterUrl: 'https://x.com',
+  mediumUrl: 'https://medium.com',
+  dribbbleUrl: 'https://dribbble.com',
+  websiteUrl: 'https://alexmorgan.dev',
+  cvUrl: '#',
+  yearsExperience: 5,
+  completedProjects: 50,
+  happyClients: 30,
+  technologiesCount: 10,
+  clientSatisfaction: 99.4
+};
+
+export const DEFAULT_SKILL_CATEGORIES: SkillCategory[] = [
+  {
+    category: 'Frontend Engineering',
+    iconName: 'Layout',
+    skills: [
+      { name: 'React 19 / TypeScript', level: 98, experience: '5+ years', featured: true },
+      { name: 'Tailwind CSS / PostCSS', level: 95, experience: '5+ years', featured: true },
+      { name: 'Next.js & Modern SSR', level: 90, experience: '4+ years', featured: true },
+      { name: 'Motion / Framer Motion', level: 92, experience: '3+ years', featured: true },
+      { name: 'State Architecture (Zustand/Redux)', level: 88, experience: '4+ years' },
+      { name: 'Responsive Web / Accessibility (a11y)', level: 96, experience: '5+ years' }
+    ]
+  },
+  {
+    category: 'Backend & Cloud Services',
+    iconName: 'Server',
+    skills: [
+      { name: 'Node.js & Express.js', level: 94, experience: '5+ years', featured: true },
+      { name: 'Google Cloud Platform (Cloud Run)', level: 90, experience: '4+ years', featured: true },
+      { name: 'PostgreSQL & Cloud SQL', level: 88, experience: '4+ years', featured: true },
+      { name: 'Firebase / Firestore & Auth', level: 95, experience: '5+ years', featured: true },
+      { name: 'REST APIs & GraphQL', level: 92, experience: '5+ years' },
+      { name: 'Docker & Microservices', level: 86, experience: '3+ years' }
+    ]
+  },
+  {
+    category: 'Industrial Systems & Automation',
+    iconName: 'Cpu',
+    skills: [
+      { name: 'RFID UHF Hardware & Encoding', level: 92, experience: '3+ years', featured: true },
+      { name: 'High-Speed Barcode QA & Verification', level: 94, experience: '4+ years', featured: true },
+      { name: 'Lean 5S Audit & Kaizen Engines', level: 90, experience: '3+ years', featured: true },
+      { name: 'Live Shop-Floor Telemetry & OEE', level: 88, experience: '3+ years' },
+      { name: 'Automated Shift Scheduling VM', level: 96, experience: '4+ years' }
+    ]
+  },
+  {
+    category: 'UI/UX Design & Prototyping',
+    iconName: 'Palette',
+    skills: [
+      { name: 'Figma Design Systems & Tokens', level: 95, experience: '5+ years', featured: true },
+      { name: 'High-Fidelity Micro-interactions', level: 90, experience: '4+ years', featured: true },
+      { name: 'Dark Mode & Mathematical Hierarchy', level: 98, experience: '5+ years', featured: true },
+      { name: 'Wireframing & User Journey Mapping', level: 92, experience: '4+ years' },
+      { name: 'Design-to-Code Automation', level: 94, experience: '4+ years' }
+    ]
+  }
+];
+
+export const DEFAULT_EXPERIENCES: ExperienceTimelineItem[] = [
+  {
+    id: 'exp-1',
+    role: 'Lead Full Stack Architect & Design Systems Lead',
+    company: 'Enterprise Digital Systems',
+    location: 'San Francisco, CA (Remote)',
+    period: '2024 - Present',
+    type: 'Lead',
+    description: 'Spearheaded full-stack cloud applications, industrial automation engines, and modern dark-mode design systems for enterprise operations.',
+    achievements: [
+      'Engineered sub-second reactive dashboards supporting 10,000+ daily operational records',
+      'Designed a modular atomic UI library reducing frontend feature rollout cycle by 45%',
+      'Integrated real-time Google Workspace and Cloud Run container infrastructure'
+    ],
+    techStack: ['React 19', 'TypeScript', 'Tailwind CSS', 'Node.js', 'Google Cloud', 'Firestore']
+  },
+  {
+    id: 'exp-2',
+    role: 'Senior Full Stack & Automation Engineer',
+    company: 'Apex Tech Solutions',
+    location: 'Austin, TX',
+    period: '2022 - 2024',
+    type: 'Full-time',
+    description: 'Designed and deployed real-time RFID serialization, inventory tracking systems, and high-performance business web applications.',
+    achievements: [
+      'Built automated barcode verification pipelines reaching 99.98% accuracy on factory lines',
+      'Architected RESTful microservices and optimized PostgreSQL database queries by 60%',
+      'Authored automated unit and end-to-end testing suites'
+    ],
+    techStack: ['React', 'Node.js', 'PostgreSQL', 'Docker', 'RFID UHF', 'Express']
+  },
+  {
+    id: 'exp-3',
+    role: 'Frontend & UI/UX Developer',
+    company: 'Creative Studio Labs',
+    location: 'New York, NY',
+    period: '2021 - 2022',
+    type: 'Full-time',
+    description: 'Developed immersive web interfaces, accessible client portals, and fluid interactive marketing experiences.',
+    achievements: [
+      'Delivered over 25 client web applications with 100% lighthouse accessibility scores',
+      'Collaborated closely with product designers to implement pixel-perfect micro-animations'
+    ],
+    techStack: ['TypeScript', 'Next.js', 'Tailwind CSS', 'Figma', 'Motion']
+  }
+];
+
+export const DEFAULT_BLOG_POSTS: BlogPostItem[] = [
+  {
+    id: 'blog-1',
+    title: 'Architecting Enterprise Web Apps with Modern React & Google Workspace',
+    category: 'Architecture',
+    readTime: '6 min read',
+    date: 'Aug 28, 2026',
+    excerpt: 'How to build lightning-fast, reactive enterprise dashboards using React, TypeScript, and live bidirectional Google Sheets synchronization.',
+    coverImage: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=800&q=80',
+    tags: ['React', 'TypeScript', 'Google Cloud', 'Sheets API'],
+    author: 'Alex Morgan',
+    content: 'Enterprise applications often require seamless interoperability between client-facing dashboards and existing spreadsheet workflows. By implementing resilient caching layers, optimistic UI updates, and atomic state synchronization, teams can achieve instantaneous UI feedback while keeping mission-critical spreadsheets 100% consistent.'
+  },
+  {
+    id: 'blog-2',
+    title: 'Industrial RFID Serialization: From Chip Encoding to Live Floor Auditing',
+    category: 'Industrial IoT',
+    readTime: '8 min read',
+    date: 'Aug 14, 2026',
+    excerpt: 'Deep dive into high-speed RFID UHF encoding lines, EPC Gen2 validation, and real-time defect prevention on the production floor.',
+    coverImage: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=800&q=80',
+    tags: ['RFID UHF', 'Hardware', 'Automation', 'QA'],
+    author: 'Alex Morgan',
+    content: 'Industrial automation demands zero tolerance for duplicate EPC serialization or unreadable chips. Combining hardware verification antennas with custom telemetry dashboards enables immediate error quarantine and live operator feedback.'
+  },
+  {
+    id: 'blog-3',
+    title: 'The Art of Dark Mode: Contrast, Depth & Mathematical Hierarchy',
+    category: 'UI/UX Design',
+    readTime: '5 min read',
+    date: 'Jul 22, 2026',
+    excerpt: 'Why true dark mode is never pure black, and how to craft eye-safe, high-contrast digital interfaces with subtle luminosity layering.',
+    coverImage: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80',
+    tags: ['Design Systems', 'Dark Mode', 'Tailwind CSS', 'a11y'],
+    author: 'Alex Morgan',
+    content: 'Dark mode user interfaces require careful attention to luminance levels. Layering elevated surfaces with subtle lightness shifts (e.g. #090A10 canvas with #121524 containers) creates natural optical hierarchy without harsh borders.'
+  }
+];
+
 export const DEFAULT_EXPERTISE_ITEMS: ExpertiseItem[] = [
   {
     id: 'exp-1',
@@ -37,7 +238,7 @@ export const DEFAULT_EXPERTISE_ITEMS: ExpertiseItem[] = [
     description: 'Crafting pixel-perfect, accessible, and intuitive digital interfaces with robust design tokens, atomic components, and seamless responsive layouts.',
     iconName: 'Palette',
     tags: ['Figma', 'Design Systems', 'Responsive UI', 'Interaction Design'],
-    accentColor: '#6342F5'
+    accentColor: '#6366F1'
   },
   {
     id: 'exp-2',
@@ -46,7 +247,7 @@ export const DEFAULT_EXPERTISE_ITEMS: ExpertiseItem[] = [
     description: 'Architecting resilient full-stack systems with modern React, TypeScript, Node.js, and Google Cloud, ensuring sub-second response times.',
     iconName: 'Layers',
     tags: ['React', 'TypeScript', 'Node.js', 'Google Sheets API', 'Cloud Run'],
-    accentColor: '#3B82F6'
+    accentColor: '#8B5CF6'
   },
   {
     id: 'exp-3',
@@ -67,25 +268,6 @@ export const DEFAULT_EXPERTISE_ITEMS: ExpertiseItem[] = [
     accentColor: '#F59E0B'
   }
 ];
-
-export const DEFAULT_DEVELOPER_PROFILE: DeveloperProfile = {
-  name: 'John Moore',
-  rolePrefix: 'im john moore,',
-  roleHighlight: 'a digital designer',
-  bio: 'Specializing in intuitive digital product experiences, modern design systems, and robust enterprise engineering. Building seamless digital interfaces that elevate operational efficiency.',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=900&q=80',
-  email: 'john.moore@brandfolio.design',
-  phone: '+1 (555) 234-5678',
-  location: 'San Francisco, CA / Global Remote',
-  availability: 'Available for new projects',
-  githubUrl: 'https://github.com',
-  linkedinUrl: 'https://linkedin.com',
-  dribbbleUrl: 'https://dribbble.com',
-  websiteUrl: 'https://brandfolio.design',
-  yearsExperience: 8,
-  completedProjects: 45,
-  clientSatisfaction: 99.8
-};
 
 export interface PortfolioItem {
   id: string;

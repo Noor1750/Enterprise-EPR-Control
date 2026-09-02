@@ -28,18 +28,18 @@ export default function UserAccessSummaryModal({
   adminUser,
   onClose,
   onRefresh,
-  employees
+  employees = []
 }: UserAccessSummaryModalProps) {
   const [selectedModule, setSelectedModule] = useState<string>('all');
   const [activeView, setActiveView] = useState<'matrix' | 'details'>('matrix');
   const [auditComment, setAuditComment] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const userKey = userScope.username.toLowerCase();
+  const userKey = (userScope?.username || '').toLowerCase();
 
   // Matched employee row if available
-  const matchedEmp = employees.find(e => e[0] === userScope.employeeId || e[1]?.toLowerCase() === userScope.username.toLowerCase());
-  const displayName = userScope.employeeName || (matchedEmp ? matchedEmp[1] : userScope.username);
+  const matchedEmp = (employees || []).find(e => e && (e[0] === userScope?.employeeId || e[1]?.toLowerCase() === userScope?.username?.toLowerCase()));
+  const displayName = userScope?.employeeName || (matchedEmp ? matchedEmp[1] : (userScope?.username || 'User'));
 
   const handleToggleOverride = (moduleKey: string, action: PermissionType, currentlyAllowed: boolean) => {
     setIsSaving(true);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   X, Eye, Shield, Users, Compass, 
   CheckCircle2, XCircle, AlertTriangle, ArrowRight,
@@ -11,26 +11,40 @@ import {
   ALL_PERMISSION_TYPES, 
   PermissionType,
   calculateEffectiveUserPermissions, 
+  DEFAULT_ADMIN_SCOPE,
   UserRole 
 } from '../../lib/security';
 import { findNavigator } from '../../lib/navigators';
 
 interface ImpersonationPreviewModalProps {
-  users: string[][];
-  employees: string[][];
+  users?: string[][];
+  employees?: string[][];
   onClose: () => void;
 }
 
 export default function ImpersonationPreviewModal({
-  users,
-  employees,
+  users = [],
+  employees = [],
   onClose
 }: ImpersonationPreviewModalProps) {
-  const parsedUsers = users.map(u => parseUserSecurityScope(u));
-  const [selectedUserEmail, setSelectedUserEmail] = useState<string>(parsedUsers[0]?.username || '');
+  const parsedUsers = useMemo(() => {
+    const valid = (users || [])
+      .filter(u => Array.isArray(u) && u.length > 0 && u[0] && String(u[0]).trim() !== '' && String(u[0]).toLowerCase() !== 'gmail id' && String(u[0]).toLowerCase() !== 'username')
+      .map(u => parseUserSecurityScope(u))
+      .filter(u => Boolean(u && u.username));
+
+    if (valid.length === 0) {
+      return [DEFAULT_ADMIN_SCOPE];
+    }
+    return valid;
+  }, [users]);
+
+  const [selectedUserEmail, setSelectedUserEmail] = useState<string>(parsedUsers[0]?.username || DEFAULT_ADMIN_SCOPE.username);
   const [activeTab, setActiveTab] = useState<'navigation' | 'matrix' | 'scope'>('navigation');
 
-  const selectedScope = parsedUsers.find(u => u.username.toLowerCase() === selectedUserEmail.toLowerCase()) || parsedUsers[0];
+  const selectedScope = useMemo(() => {
+    return parsedUsers.find(u => u.username.toLowerCase() === selectedUserEmail.toLowerCase()) || parsedUsers[0] || DEFAULT_ADMIN_SCOPE;
+  }, [parsedUsers, selectedUserEmail]);
 
   const allNavItems = [
     { id: 'dashboard', name: 'ERP Dashboard', icon: Menu, moduleKey: 'dashboard' },
@@ -73,7 +87,7 @@ export default function ImpersonationPreviewModal({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -84,13 +98,13 @@ export default function ImpersonationPreviewModal({
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-slate-700">Preview User:</span>
             <select
-              value={selectedUserEmail}
+              value={selectedScope?.username || selectedUserEmail}
               onChange={e => setSelectedUserEmail(e.target.value)}
               className="text-xs border border-slate-300 rounded-lg px-3 py-1.5 bg-white font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 min-w-[260px]"
             >
               {parsedUsers.map(u => (
                 <option key={u.username} value={u.username}>
-                  {u.employeeName || u.username} ({u.role} - {u.accessLimitType})
+                  {u.employeeName || u.username} ({u.role || 'User'} - {u.accessLimitType || 'all'})
                 </option>
               ))}
             </select>
@@ -99,24 +113,24 @@ export default function ImpersonationPreviewModal({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('navigation')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                activeTab === 'navigation' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeTab === 'navigation' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
               }`}
             >
               Simulated Navigation
             </button>
             <button
               onClick={() => setActiveTab('matrix')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                activeTab === 'matrix' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeTab === 'matrix' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
               }`}
             >
               Action Permissions
             </button>
             <button
               onClick={() => setActiveTab('scope')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                activeTab === 'scope' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeTab === 'scope' ? 'bg-purple-600 text-white shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
               }`}
             >
               Data Scope Summary
@@ -126,22 +140,22 @@ export default function ImpersonationPreviewModal({
 
         {/* User Profile Snapshot */}
         <div className="px-6 py-3 bg-purple-50/40 border-b border-purple-100 flex flex-wrap items-center justify-between gap-4 text-xs shrink-0">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <div>
               <span className="text-slate-400 font-medium">Role: </span>
-              <strong className="text-purple-900">{selectedScope.role}</strong>
+              <strong className="text-purple-900">{selectedScope?.role || 'User'}</strong>
             </div>
             <div>
               <span className="text-slate-400 font-medium">Department: </span>
-              <strong className="text-slate-800">{selectedScope.assignedDepartment || 'None / All'}</strong>
+              <strong className="text-slate-800">{selectedScope?.assignedDepartment || 'None / All'}</strong>
             </div>
             <div>
               <span className="text-slate-400 font-medium">Supervisor: </span>
-              <strong className="text-slate-800">{selectedScope.supervisorName || 'Direct'}</strong>
+              <strong className="text-slate-800">{selectedScope?.supervisorName || 'Direct'}</strong>
             </div>
             <div>
               <span className="text-slate-400 font-medium">Landing Navigator: </span>
-              <strong className="text-blue-700">{findNavigator(selectedScope.defaultNavigator || '')?.name || selectedScope.defaultNavigator || 'System Default'}</strong>
+              <strong className="text-blue-700">{findNavigator(selectedScope?.defaultNavigator || '')?.name || selectedScope?.defaultNavigator || 'System Default'}</strong>
             </div>
           </div>
         </div>
@@ -151,7 +165,7 @@ export default function ImpersonationPreviewModal({
           {activeTab === 'navigation' && (
             <div className="space-y-4">
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Sidebar Navigation Items for {selectedScope.employeeName || selectedScope.username}
+                Sidebar Navigation Items for {selectedScope?.employeeName || selectedScope?.username || 'User'}
               </h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -259,10 +273,10 @@ export default function ImpersonationPreviewModal({
               <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
                 <h4 className="font-bold text-sm text-purple-900 mb-2">Data Isolation & Visibility Rules</h4>
                 <div className="space-y-2 text-xs text-purple-800">
-                  <p>• <strong className="font-bold">Access Limit Mode:</strong> {selectedScope.accessLimitType.toUpperCase()}</p>
-                  <p>• <strong className="font-bold">Authorized Department:</strong> {selectedScope.assignedDepartment || 'Enterprise / All'}</p>
-                  <p>• <strong className="font-bold">Supervisor Link:</strong> {selectedScope.supervisorName || 'Direct'}</p>
-                  <p>• <strong className="font-bold">Assigned Specific Employee IDs:</strong> {selectedScope.assignedEmployeeIds.length > 0 ? selectedScope.assignedEmployeeIds.join(', ') : 'None / Dynamic'}</p>
+                  <p>• <strong className="font-bold">Access Limit Mode:</strong> {String(selectedScope?.accessLimitType || 'all').toUpperCase()}</p>
+                  <p>• <strong className="font-bold">Authorized Department:</strong> {selectedScope?.assignedDepartment || 'Enterprise / All'}</p>
+                  <p>• <strong className="font-bold">Supervisor Link:</strong> {selectedScope?.supervisorName || 'Direct'}</p>
+                  <p>• <strong className="font-bold">Assigned Specific Employee IDs:</strong> {(selectedScope?.assignedEmployeeIds && selectedScope.assignedEmployeeIds.length > 0) ? selectedScope.assignedEmployeeIds.join(', ') : 'None / Dynamic'}</p>
                 </div>
               </div>
             </div>
@@ -276,7 +290,7 @@ export default function ImpersonationPreviewModal({
           </span>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition shadow-xs"
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
           >
             Exit Simulation
           </button>
