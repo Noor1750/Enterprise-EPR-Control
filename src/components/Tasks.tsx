@@ -10,10 +10,20 @@ import TaskList from './tasks/TaskList';
 import TaskForm from './tasks/TaskForm';
 import TaskDetailsModal from './tasks/TaskDetailsModal';
 import AdminDeleteConfirmModal from './common/AdminDeleteConfirmModal';
+import DailyTaskNotificationModal from './tasks/DailyTaskNotificationModal';
+import { 
+  getEmployeeReminderConfig, 
+  getBangladeshDateTime 
+} from '../lib/taskReminderEngine';
+import { 
+  playTaskNotificationSound, 
+  TaskSoundType 
+} from '../lib/taskSoundEngine';
+import { notifyTaskAssignment } from '../lib/taskAssignmentNotifier';
 import { 
   CheckSquare, Plus, Search, Filter, X, Download, 
   RefreshCw, Building2, User, UserCheck, ShieldCheck, 
-  Sparkles, Calendar, Layers
+  Sparkles, Calendar, Layers, Bell, Volume2, Sliders
 } from 'lucide-react';
 import { format, isToday, isTomorrow, isThisWeek, parseISO, isPast, isValid } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -55,6 +65,7 @@ export default function Tasks({ spreadsheetId, user, userSecurityScope }: TasksP
   const [assigneeFilter, setAssigneeFilter] = useState('All');
   const [showNotification, setShowNotification] = useState(false);
   const [todayTaskCount, setTodayTaskCount] = useState(0);
+  const [isDailyTaskModalOpen, setIsDailyTaskModalOpen] = useState(false);
 
   const empId = userSecurityScope?.employeeId?.toUpperCase() || '';
   const userName = (userSecurityScope?.employeeName || user?.displayName || '').toLowerCase();
@@ -252,6 +263,14 @@ export default function Tasks({ spreadsheetId, user, userSecurityScope }: TasksP
         }
       }
       
+      // Automatically notify the assigned employee with sound & smart alert
+      if (finalTask.assigneeId && finalTask.status !== 'Completed' && finalTask.status !== 'Cancelled') {
+        notifyTaskAssignment(finalTask, currentUserIdStr, currentUserNameStr);
+      }
+
+      // Broadcast update across the app
+      window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName: 'Tasks' } }));
+
       setIsFormOpen(false);
       setEditingTask(null);
       await loadData();
@@ -481,34 +500,49 @@ export default function Tasks({ spreadsheetId, user, userSecurityScope }: TasksP
 
   return (
     <div className="p-6 md:p-8 max-w-[1650px] mx-auto space-y-6 bg-gray-50/50 min-h-screen">
-      {/* Today's Tasks Notification Banner */}
+      {/* Today's Tasks Smart Notification Banner */}
       {showNotification && (
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-md mb-6 flex items-center justify-between animate-fade-in-up">
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-lg mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-500/30 animate-fade-in-up">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold">
+            <div className="w-11 h-11 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center font-bold text-sky-400 shadow-xs shrink-0">
               <CheckSquare className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-base">You have {todayTaskCount} task(s) due today</h4>
-              <p className="text-xs text-blue-100 mt-0.5">Stay on track by updating your task progress throughout the day.</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-extrabold text-base text-white">You have {todayTaskCount} task(s) due today</h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/30 text-indigo-200 border border-indigo-400/40">
+                  10:00 AM BST Schedule
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Default: Bangladesh Time Saturday to Thursday 10:00 AM (Weekends & Holidays excluded). Review & acknowledge below.
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap self-end md:self-center">
+            <button 
+              onClick={() => setIsDailyTaskModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-black rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-sky-200" />
+              <span>Open Daily Popup & Knowledge</span>
+            </button>
             <button 
               onClick={() => {
                 setViewMode('urgent-today');
                 setDateFilter('Today');
                 setShowNotification(false);
               }}
-              className="px-4 py-2 bg-white text-indigo-700 text-xs font-bold rounded-xl hover:bg-blue-50 transition-all shadow-xs"
+              className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition-all border border-white/10 cursor-pointer"
             >
-              View My Today's Tasks
+              View List
             </button>
             <button 
               onClick={() => setShowNotification(false)}
-              className="p-2 text-blue-200 hover:text-white rounded-xl hover:bg-white/10 transition-colors"
+              className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+              title="Dismiss banner"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -552,7 +586,17 @@ export default function Tasks({ spreadsheetId, user, userSecurityScope }: TasksP
               </div>
             </div>
             
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {/* Daily Popup & Sound Alerts Button */}
+              <button
+                onClick={() => setIsDailyTaskModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Daily Tasks Popup, Sound Themes & 10:00 AM Reminders"
+              >
+                <Bell className="w-4 h-4 text-indigo-600" />
+                <span>Daily Popup & Sounds</span>
+              </button>
+
               <button
                 onClick={handleExportExcel}
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all cursor-pointer group"
@@ -789,6 +833,28 @@ export default function Tasks({ spreadsheetId, user, userSecurityScope }: TasksP
         confirmButtonText="Verify & Delete Task"
         onConfirm={executeConfirmedDeletion}
         onClose={() => setDeleteModalData(null)}
+      />
+
+      {/* Daily Task Notification & Sound Modal */}
+      <DailyTaskNotificationModal
+        isOpen={isDailyTaskModalOpen}
+        onClose={() => setIsDailyTaskModalOpen(false)}
+        employeeId={userSecurityScope?.employeeId || ''}
+        employeeName={userSecurityScope?.employeeName || user?.displayName || 'Employee'}
+        employeeRole={userSecurityScope?.role || 'Staff'}
+        employeeDepartment={userSecurityScope?.assignedDepartment || 'Operations'}
+        tasks={tasks}
+        onUpdateTaskProgress={async (taskId, progress, status) => {
+          const t = tasks.find(x => x.id === taskId);
+          if (t) {
+            await handleQuickUpdateProgress(t, progress);
+          }
+        }}
+        onNavigateToTasks={(term) => {
+          setIsDailyTaskModalOpen(false);
+          setViewMode('urgent-today');
+          setDateFilter('Today');
+        }}
       />
     </div>
   );

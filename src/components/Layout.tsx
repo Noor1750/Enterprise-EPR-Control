@@ -45,6 +45,25 @@ import { resolvePaletteForModule, getActiveThemePreference, applyPaletteToDocume
 import ThemeSegmentSelector from './common/ThemeSegmentSelector';
 import AnimatedSlogan from './common/AnimatedSlogan';
 import ErrorBoundary from './common/ErrorBoundary';
+import DailyTaskNotificationModal from './tasks/DailyTaskNotificationModal';
+import TaskAssignmentToast from './tasks/TaskAssignmentToast';
+import TaskAssignmentModal from './tasks/TaskAssignmentModal';
+import TaskNotificationBellDropdown from './tasks/TaskNotificationBellDropdown';
+import { 
+  AssignmentNotification, 
+  checkNewAssignmentsFromTaskList,
+  getUnreadAssignmentCount
+} from '../lib/taskAssignmentNotifier';
+import { 
+  getEmployeeReminderConfig, 
+  evaluateDailyTaskPopupTrigger, 
+  saveEmployeeReminderConfig,
+  getBangladeshDateTime
+} from '../lib/taskReminderEngine';
+import { playTaskNotificationSound } from '../lib/taskSoundEngine';
+import { Task, parseTaskRow, buildTaskRow } from '../lib/taskEngine';
+import { HolidayRecord, parseHolidayRow, DEFAULT_2026_HOLIDAYS } from '../lib/holidayEngine';
+import { updateRowByPrimaryKey } from '../lib/sheets';
 
 interface LayoutProps {
   user: User;
@@ -64,10 +83,28 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [selectedProfileEmployee, setSelectedProfileEmployee] = useState<EmployeeShiftState | null>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [holidays, setHolidays] = useState<HolidayRecord[]>([]);
+  const [isDailyTaskModalOpen, setIsDailyTaskModalOpen] = useState(false);
+  const [isNotificationDropdownOpen, setIsNotificationDropdownOpen] = useState(false);
+  const [selectedAssignmentModal, setSelectedAssignmentModal] = useState<AssignmentNotification | null>(null);
+  const [unreadAssignmentCount, setUnreadAssignmentCount] = useState(0);
   const [landingNotice, setLandingNotice] = useState<string | null>(null);
   const [hasInitializedLanding, setHasInitializedLanding] = useState(false);
   const [themePreference, setThemePreference] = useState<string>(getActiveThemePreference());
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const bellDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close notification dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (bellDropdownRef.current && !bellDropdownRef.current.contains(e.target as Node)) {
+        setIsNotificationDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Subscribe to global loading engine
   const loadingState = useGlobalLoading();
@@ -191,6 +228,143 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
     };
     fetchEmployees();
   }, [spreadsheetId]);
+
+  // Load Tasks and Holidays for intelligent Daily Task Reminders
+  useEffect(() => {
+    if (!spreadsheetId) return;
+    const loadTasksAndHolidays = async () => {
+      try {
+        const [taskData, holidayData] = await Promise.all([
+          getRange(spreadsheetId, 'Tasks!A:Z'),
+          getRange(spreadsheetId, 'Holidays!A:Z')
+        ]);
+
+        if (taskData && taskData.length > 1) {
+          const parsedTasks = taskData.slice(1).map(r => parseTaskRow(r)).filter(t => t.id);
+          setTasks(parsedTasks);
+
+          // Automated Task Assignment Detection & Notification with Sound
+          const currentEmpId = userSecurityScope?.employeeId || '';
+          const currentEmpName = userSecurityScope?.employeeName || user.displayName || '';
+          checkNewAssignmentsFromTaskList(currentEmpId, currentEmpName, parsedTasks);
+          setUnreadAssignmentCount(getUnreadAssignmentCount(currentEmpId, currentEmpName));
+        }
+
+        if (holidayData && holidayData.length > 1) {
+          const parsedHols = holidayData.slice(1).map((r, i) => parseHolidayRow(r, i));
+          setHolidays(parsedHols);
+        } else {
+          setHolidays(DEFAULT_2026_HOLIDAYS as HolidayRecord[]);
+        }
+      } catch (e) {
+        console.warn('Failed to load tasks/holidays in Layout:', e);
+        setHolidays(DEFAULT_2026_HOLIDAYS as HolidayRecord[]);
+      }
+    };
+
+    loadTasksAndHolidays();
+
+    // Periodic poll every 25 seconds for cross-user assignment detection
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadTasksAndHolidays();
+      }
+    }, 25000);
+
+    const handleDbUpdate = (evt: any) => {
+      const sheet = evt?.detail?.sheetName;
+      if (!sheet || sheet === 'Tasks' || sheet === 'Holidays') {
+        loadTasksAndHolidays();
+      }
+    };
+    const handleTaskAssigned = () => {
+      const currentEmpId = userSecurityScope?.employeeId || '';
+      const currentEmpName = userSecurityScope?.employeeName || user.displayName || '';
+      setUnreadAssignmentCount(getUnreadAssignmentCount(currentEmpId, currentEmpName));
+    };
+
+    window.addEventListener('erp-db-updated', handleDbUpdate);
+    window.addEventListener('erp-task-assigned', handleTaskAssigned);
+    const handleOpenModal = () => setIsDailyTaskModalOpen(true);
+    window.addEventListener('erp-open-daily-task-reminder', handleOpenModal);
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('erp-db-updated', handleDbUpdate);
+      window.removeEventListener('erp-task-assigned', handleTaskAssigned);
+      window.removeEventListener('erp-open-daily-task-reminder', handleOpenModal);
+    };
+  }, [spreadsheetId, userSecurityScope, user]);
+
+  // Scheduled Daily Task Reminder & Sound Trigger Check (Default 10:00 AM BD Time, Sat-Thu, Weekends & Holidays excluded)
+  useEffect(() => {
+    if (!tasks || tasks.length === 0) return;
+
+    const checkReminder = () => {
+      const currentEmpId = userSecurityScope?.employeeId || '';
+      const currentEmpName = userSecurityScope?.employeeName || user.displayName || '';
+      const cfg = getEmployeeReminderConfig(currentEmpId, currentEmpName);
+
+      const evalResult = evaluateDailyTaskPopupTrigger(cfg, tasks, holidays);
+      if (evalResult.shouldTrigger) {
+        // Play notification audio
+        playTaskNotificationSound(cfg.soundKey, cfg.soundVolume);
+
+        // Open modal
+        setIsDailyTaskModalOpen(true);
+
+        // Save last triggered slot to avoid continuous trigger in the same slot
+        const bdNow = getBangladeshDateTime();
+        const slot = evalResult.isSnoozeTrigger ? `snooze_${Date.now()}` : `${bdNow.dateString}_${bdNow.timeString}`;
+        const updated = { ...cfg, lastTriggeredSlot: slot, snoozeUntil: null };
+        saveEmployeeReminderConfig(updated);
+      }
+    };
+
+    // Initial check after short delay, then run every 20 seconds
+    const initialTimer = setTimeout(checkReminder, 2500);
+    const intervalTimer = setInterval(checkReminder, 20000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(intervalTimer);
+    };
+  }, [tasks, holidays, userSecurityScope, user]);
+
+  // Count user's tasks due today or overdue for top bar bell badge
+  const userDueTaskCount = useMemo(() => {
+    const cleanId = (userSecurityScope?.employeeId || '').toUpperCase().trim();
+    const cleanName = (userSecurityScope?.employeeName || user.displayName || '').toLowerCase().trim();
+    const bdNow = getBangladeshDateTime();
+    const todayStr = bdNow.dateString;
+
+    return tasks.filter(t => {
+      if (t.deleted === 'TRUE' || t.status === 'Completed' || t.status === 'Cancelled') return false;
+      const idMatch = cleanId && t.assigneeId && t.assigneeId.toUpperCase().trim() === cleanId;
+      const nameMatch = cleanName && t.assigneeName && t.assigneeName.toLowerCase().includes(cleanName);
+      if (!idMatch && !nameMatch) return false;
+      return t.dueDate <= todayStr;
+    }).length;
+  }, [tasks, userSecurityScope, user]);
+
+  // Quick progress update from modal
+  const handleUpdateTaskProgress = async (taskId: string, progress: number, status: Task['status']) => {
+    if (!spreadsheetId) return;
+    const target = tasks.find(t => t.id === taskId);
+    if (!target) return;
+    const now = new Date().toISOString();
+    const updatedTask: Task = {
+      ...target,
+      progress,
+      status,
+      updatedAt: now,
+      completedAt: status === 'Completed' ? now : target.completedAt
+    };
+    const updatedRow = buildTaskRow(updatedTask);
+    await updateRowByPrimaryKey(spreadsheetId, 'Tasks', taskId, updatedRow);
+    setTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));
+    window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName: 'Tasks' } }));
+  };
 
   const navigation = [
     { id: 'dashboard', name: 'ERP Dashboard', icon: Menu, moduleName: 'All' },
@@ -325,6 +499,18 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
           </div>
 
           <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setIsNotificationDropdownOpen(prev => !prev)}
+              className="relative p-1.5 text-slate-200 hover:text-white hover:bg-white/10 rounded-lg active:scale-95 transition-all flex items-center bg-white/5 border border-white/10 cursor-pointer"
+              title={`Daily Tasks & Assignments • ${userDueTaskCount + unreadAssignmentCount} total alerts`}
+            >
+              <Bell className="w-4 h-4 text-sky-300" />
+              {(userDueTaskCount + unreadAssignmentCount) > 0 && (
+                <span className={`absolute -top-1 -right-1 px-1 min-w-[15px] h-[15px] ${unreadAssignmentCount > 0 ? 'bg-amber-400 text-slate-950' : 'bg-rose-500 text-white'} font-black text-[9px] rounded-full flex items-center justify-center border border-white`}>
+                  {userDueTaskCount + unreadAssignmentCount}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => setIsCommandPaletteOpen(true)}
               className="p-1.5 text-slate-200 hover:text-white hover:bg-white/10 rounded-lg active:scale-95 transition-all flex items-center gap-1 bg-white/5 border border-white/10"
@@ -763,6 +949,43 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
                 </div>
               </div>
 
+              {/* Daily Task & Task Assignment Notification Bell */}
+              <div className="relative" ref={bellDropdownRef}>
+                <button
+                  onClick={() => setIsNotificationDropdownOpen(prev => !prev)}
+                  className={`relative p-2 rounded-2xl border transition-all cursor-pointer flex items-center justify-center ${
+                    unreadAssignmentCount > 0
+                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-md ring-2 ring-indigo-400/40'
+                      : userDueTaskCount > 0
+                      ? 'bg-indigo-50 hover:bg-indigo-100/90 text-indigo-700 border-indigo-200 shadow-xs'
+                      : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-600 border-slate-200'
+                  }`}
+                  title={`Notifications & Reminders • ${unreadAssignmentCount} new assignment(s), ${userDueTaskCount} tasks due`}
+                >
+                  <Bell className={`w-4 h-4 ${unreadAssignmentCount > 0 ? 'animate-bounce' : userDueTaskCount > 0 ? 'animate-bounce text-indigo-600' : ''}`} />
+                  {(userDueTaskCount + unreadAssignmentCount) > 0 && (
+                    <span className={`absolute -top-1 -right-1 px-1.5 min-w-[18px] h-[18px] ${unreadAssignmentCount > 0 ? 'bg-amber-400 text-slate-950 font-black' : 'bg-rose-600 text-white font-bold'} text-[10px] rounded-full flex items-center justify-center border-2 border-white shadow-xs`}>
+                      {userDueTaskCount + unreadAssignmentCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Dropdown Menu */}
+                <TaskNotificationBellDropdown
+                  isOpen={isNotificationDropdownOpen}
+                  onClose={() => setIsNotificationDropdownOpen(false)}
+                  currentEmployeeId={userSecurityScope?.employeeId || ''}
+                  currentEmployeeName={userSecurityScope?.employeeName || user?.displayName || 'Employee'}
+                  onOpenAssignmentDetails={(notif) => {
+                    setSelectedAssignmentModal(notif);
+                  }}
+                  onOpenDailyReminderModal={() => {
+                    setIsDailyTaskModalOpen(true);
+                  }}
+                  dueTodayCount={userDueTaskCount}
+                />
+              </div>
+
               <div className="h-6 w-px bg-slate-200" />
 
               {/* Right Side: Logged-in User Information Card & Profile Menu */}
@@ -888,6 +1111,22 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
                             <span>Command Palette</span>
                           </div>
                           <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px] font-mono font-bold text-slate-500">⌘K</kbd>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            setIsDailyTaskModalOpen(true);
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-semibold transition text-left cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Bell className="w-4 h-4 text-indigo-600" />
+                            <span>Daily Tasks & Reminders</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                            10 AM BST
+                          </span>
                         </button>
 
                         <button
@@ -1024,6 +1263,41 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
           }}
         />
       )}
+
+      {/* Daily Task Notification & Sound Popup Modal */}
+      <DailyTaskNotificationModal
+        isOpen={isDailyTaskModalOpen}
+        onClose={() => setIsDailyTaskModalOpen(false)}
+        employeeId={userSecurityScope?.employeeId || ''}
+        employeeName={userSecurityScope?.employeeName || user?.displayName || 'Employee'}
+        employeeRole={userSecurityScope?.role || 'Staff'}
+        employeeDepartment={userSecurityScope?.assignedDepartment || 'Operations'}
+        tasks={tasks}
+        holidays={holidays}
+        onUpdateTaskProgress={handleUpdateTaskProgress}
+        onNavigateToTasks={(term) => {
+          setActiveModule('tasks');
+        }}
+      />
+
+      {/* Real-time Task Assignment Audio Alert & Animated Toast */}
+      <TaskAssignmentToast
+        currentEmployeeId={userSecurityScope?.employeeId || ''}
+        currentEmployeeName={userSecurityScope?.employeeName || user?.displayName || ''}
+        onOpenDetails={(notif) => setSelectedAssignmentModal(notif)}
+      />
+
+      {/* Task Assignment Detailed Inspection & Formal Acknowledgment Modal */}
+      <TaskAssignmentModal
+        isOpen={!!selectedAssignmentModal}
+        notification={selectedAssignmentModal}
+        onClose={() => setSelectedAssignmentModal(null)}
+        currentEmployeeId={userSecurityScope?.employeeId || ''}
+        currentEmployeeName={userSecurityScope?.employeeName || user?.displayName || ''}
+        onNavigateToTasks={() => {
+          setActiveModule('tasks');
+        }}
+      />
 
       {/* Global Application Loading Animation Overlay */}
       <GlobalLoadingScreen />

@@ -124,20 +124,43 @@ export function matchEvaluationToReview(
 }
 
 /**
+ * Checks if a performance evaluation record is completed
+ */
+export function isEvaluationCompleted(evalRecord?: PerformanceEvaluationRecord | null): boolean {
+  if (!evalRecord || !evalRecord.employeeId) return false;
+  const hasScores = typeof evalRecord.totalScore === 'number' && evalRecord.totalScore > 0;
+  const hasRating = typeof evalRecord.averageRating === 'number' && evalRecord.averageRating > 0;
+  const hasDateAndEvaluator = Boolean(evalRecord.evaluationDate || evalRecord.evaluatedBy);
+  const status = (evalRecord as any).status;
+  const isStatusCompleted = status === 'Completed' || status === 'Submitted' || status === 'Approved';
+  return (hasScores || hasRating || hasDateAndEvaluator || isStatusCompleted) && Boolean(evalRecord.employeeId.trim());
+}
+
+/**
  * Synchronizes Performance Review items with their corresponding Performance Evaluation records.
+ * ONLY includes employees whose Performance Evaluation is completed.
  * The Performance Evaluation is the SINGLE SOURCE OF TRUTH for ratings, scores, and appraisal remarks.
  */
 export function syncReviewsWithEvaluations(
   reviews: PerformanceReviewItem[],
-  evaluations: PerformanceEvaluationRecord[]
+  evaluations: PerformanceEvaluationRecord[],
+  options?: { onlyCompletedEvaluations?: boolean }
 ): PerformanceReviewItem[] {
+  const onlyCompleted = options?.onlyCompletedEvaluations !== false;
   const now = new Date();
 
-  return reviews.map(review => {
-    const matchedEval = matchEvaluationToReview(review, evaluations);
+  // Filter evaluations to only those that are completed
+  const completedEvaluations = (evaluations || []).filter(isEvaluationCompleted);
+
+  const matchedEvalIds = new Set<string>();
+  const syncedReviews: PerformanceReviewItem[] = [];
+
+  for (const review of reviews || []) {
+    const matchedEval = matchEvaluationToReview(review, completedEvaluations);
 
     if (matchedEval) {
-      // Direct synchronization from Performance Evaluation
+      matchedEvalIds.add(matchedEval.id);
+
       const evalPercentage = typeof matchedEval.percentage === 'number' 
         ? Math.round(matchedEval.percentage)
         : Math.round((matchedEval.totalScore / (matchedEval.totalPossible || 50)) * 100);
@@ -146,57 +169,87 @@ export function syncReviewsWithEvaluations(
         ? Number(matchedEval.averageRating.toFixed(2))
         : Number((matchedEval.totalScore / 10).toFixed(2));
 
-      const isCompleted = (matchedEval as any).status === 'Submitted' || (matchedEval as any).status === 'Completed' || (matchedEval as any).status === 'Approved' || Boolean(matchedEval.totalScore > 0);
-
-      const effectiveRawStatus: ReviewStatus = review.rawStatus === 'Completed' || isCompleted ? 'Completed' : review.rawStatus;
+      const effectiveRawStatus: ReviewStatus = 'Completed';
       const effectiveCompletionDate = review.completionDate || matchedEval.evaluationDate || format(now, 'yyyy-MM-dd');
 
-      const dynamicStatus = calculateDynamicReviewStatus(
-        effectiveRawStatus,
-        review.beginOn,
-        review.dueBy,
-        effectiveCompletionDate,
-        now
-      );
-
-      return {
+      syncedReviews.push({
         ...review,
         score: evalPercentage,
         rating: evalStarRating,
         evaluationId: matchedEval.id,
         evaluationGrade: matchedEval.ratingGrade,
         evaluationAverageRating: matchedEval.averageRating,
-        remarks: review.remarks || matchedEval.comments || matchedEval.strengths || matchedEval.recommendation,
+        remarks: review.remarks || matchedEval.comments || matchedEval.strengths || matchedEval.recommendation || '',
         rawStatus: effectiveRawStatus,
-        calculatedStatus: dynamicStatus,
+        calculatedStatus: 'Completed',
         completionDate: effectiveCompletionDate
-      };
+      });
+    } else if (!onlyCompleted) {
+      // If onlyCompleted is explicitly false, keep non-completed reviews
+      const effectiveRating = review.rating !== undefined && review.rating !== null
+        ? review.rating
+        : (review.score !== undefined && review.score !== null ? Number((review.score / 20).toFixed(1)) : undefined);
+      
+      const effectiveScore = review.score !== undefined && review.score !== null
+        ? review.score
+        : (review.rating !== undefined && review.rating !== null ? Math.round(review.rating * 20) : undefined);
+
+      const dynamicStatus = calculateDynamicReviewStatus(
+        review.rawStatus,
+        review.beginOn,
+        review.dueBy,
+        review.completionDate,
+        now
+      );
+
+      syncedReviews.push({
+        ...review,
+        score: effectiveScore,
+        rating: effectiveRating,
+        calculatedStatus: dynamicStatus
+      });
     }
+  }
 
-    // Keep existing scores or compute dynamic status
-    const effectiveRating = review.rating !== undefined && review.rating !== null
-      ? review.rating
-      : (review.score !== undefined && review.score !== null ? Number((review.score / 20).toFixed(1)) : undefined);
-    
-    const effectiveScore = review.score !== undefined && review.score !== null
-      ? review.score
-      : (review.rating !== undefined && review.rating !== null ? Math.round(review.rating * 20) : undefined);
+  // Include completed evaluations that do not have a pre-existing row in reviews
+  for (const evalRecord of completedEvaluations) {
+    if (!matchedEvalIds.has(evalRecord.id)) {
+      const evalPercentage = typeof evalRecord.percentage === 'number' 
+        ? Math.round(evalRecord.percentage)
+        : Math.round((evalRecord.totalScore / (evalRecord.totalPossible || 50)) * 100);
+      
+      const evalStarRating = typeof evalRecord.averageRating === 'number'
+        ? Number(evalRecord.averageRating.toFixed(2))
+        : Number((evalRecord.totalScore / 10).toFixed(2));
 
-    const dynamicStatus = calculateDynamicReviewStatus(
-      review.rawStatus,
-      review.beginOn,
-      review.dueBy,
-      review.completionDate,
-      now
-    );
+      syncedReviews.push({
+        reviewId: `REV-${evalRecord.id || evalRecord.employeeId}`,
+        reviewType: evalRecord.evaluationType ? `${evalRecord.evaluationType} Performance Evaluation` : (evalRecord.period ? `${evalRecord.period} Performance Evaluation` : 'Performance Review & Evaluation'),
+        employeeId: evalRecord.employeeId,
+        employeeName: evalRecord.employeeName,
+        department: evalRecord.department || '',
+        designation: evalRecord.designation || '',
+        reviewerId: evalRecord.evaluatedBy || 'Supervisor',
+        reviewerName: evalRecord.evaluatedBy || 'Supervisor',
+        beginOn: evalRecord.evaluationDate || format(now, 'yyyy-MM-dd'),
+        dueBy: evalRecord.evaluationDate || format(now, 'yyyy-MM-dd'),
+        rawStatus: 'Completed',
+        calculatedStatus: 'Completed',
+        completionDate: evalRecord.evaluationDate || format(now, 'yyyy-MM-dd'),
+        score: evalPercentage,
+        rating: evalStarRating,
+        remarks: evalRecord.comments || evalRecord.strengths || evalRecord.recommendation || '',
+        evaluationId: evalRecord.id,
+        evaluationGrade: evalRecord.ratingGrade,
+        evaluationAverageRating: evalRecord.averageRating,
+        createdBy: evalRecord.evaluatedBy || 'Admin',
+        createdAt: evalRecord.createdAt || new Date().toISOString(),
+        updatedAt: evalRecord.updatedAt || new Date().toISOString()
+      });
+    }
+  }
 
-    return {
-      ...review,
-      score: effectiveScore,
-      rating: effectiveRating,
-      calculatedStatus: dynamicStatus
-    };
-  });
+  return syncedReviews;
 }
 
 /**

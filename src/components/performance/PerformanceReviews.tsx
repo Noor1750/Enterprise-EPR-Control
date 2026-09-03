@@ -9,7 +9,8 @@ import type { User as FirebaseUser } from 'firebase/auth';
 import { 
   getPerformanceReviews, getPerformanceReviewTypes, createPerformanceReview,
   bulkAssignPerformanceReviews, updatePerformanceReview, PerformanceReviewItem, 
-  PerformanceReviewType, ReviewStatus, syncReviewsWithEvaluations, matchEvaluationToReview 
+  PerformanceReviewType, ReviewStatus, syncReviewsWithEvaluations, matchEvaluationToReview,
+  isEvaluationCompleted
 } from '../../lib/performanceReviewEngine';
 import { 
   getRange, getHiddenKpiEmployeeIds, ensureKpiPrivacySheet, 
@@ -296,6 +297,20 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
     })).filter(e => e.id && e.status.toLowerCase() === 'active');
   }, [employeesRaw, userSecurityScope]);
 
+  // Authorized employees strictly whose Performance Evaluation is completed
+  const employeesWithCompletedEvaluation = useMemo(() => {
+    return authorizedEmployees.filter(emp => {
+      const normId = emp.id.trim().toUpperCase();
+      const normName = emp.name.trim().toLowerCase();
+      return evaluations.some(e => 
+        isEvaluationCompleted(e) && (
+          (e.employeeId && e.employeeId.trim().toUpperCase() === normId) ||
+          (e.employeeName && e.employeeName.trim().toLowerCase() === normName)
+        )
+      );
+    });
+  }, [authorizedEmployees, evaluations]);
+
   // Available departments
   const departments = useMemo(() => {
     const set = new Set<string>();
@@ -303,20 +318,20 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
     return ['All', ...Array.from(set).sort()];
   }, [authorizedEmployees]);
 
-  // Available supervisors for filter in assign modal
+  // Available supervisors for filter in assign modal (only from staff with completed evaluations)
   const assignSupervisors = useMemo(() => {
     const set = new Set<string>();
-    authorizedEmployees.forEach(e => {
+    employeesWithCompletedEvaluation.forEach(e => {
       if (e.supervisor && e.supervisor.trim()) {
         set.add(e.supervisor.trim());
       }
     });
     return ['All', ...Array.from(set).sort()];
-  }, [authorizedEmployees]);
+  }, [employeesWithCompletedEvaluation]);
 
-  // Filtered employees for Assign Reviews modal
+  // Filtered employees for Assign Reviews modal (only staff with completed Performance Evaluation)
   const assignFilteredEmployees = useMemo(() => {
-    return authorizedEmployees.filter(emp => {
+    return employeesWithCompletedEvaluation.filter(emp => {
       if (assignDeptFilter !== 'All' && emp.department !== assignDeptFilter) return false;
       if (assignSupervisorFilter !== 'All' && emp.supervisor.trim() !== assignSupervisorFilter) return false;
       if (assignSearch.trim()) {
@@ -330,7 +345,7 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
       }
       return true;
     });
-  }, [authorizedEmployees, assignDeptFilter, assignSupervisorFilter, assignSearch]);
+  }, [employeesWithCompletedEvaluation, assignDeptFilter, assignSupervisorFilter, assignSearch]);
 
   // Searchable Evaluators / Reviewers from full Employee Directory
   const searchableReviewers = useMemo(() => {
@@ -660,12 +675,13 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">Performance Reviews & Evaluation</h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-indigo-400/20 text-indigo-200 text-xs font-bold border border-indigo-400/30">
-                Evaluation Cycle
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200 text-xs font-bold border border-emerald-400/30 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+                Completed Evaluations Only
               </span>
             </div>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl">
-              Manage structured evaluation schedules, appraisal milestones, and performance scorecards.
+              Strictly showing employees with completed Performance Evaluations. Ratings, scores, and appraisal metrics are synchronized directly from their evaluation scorecards.
             </p>
           </div>
         </div>
@@ -869,14 +885,27 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
             <span>Loading performance evaluation schedules...</span>
           </div>
         ) : filteredReviews.length === 0 ? (
-          <div className="py-16 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-            <Award className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <h4 className="text-sm font-bold text-slate-700">No Review Schedules Found</h4>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              {isAdminOrManager 
-                ? 'No performance reviews match your current filters. Click "Assign Reviews" to schedule new evaluations.' 
-                : 'No performance reviews match your current filters. Managers and Administrators can schedule new review cycles.'}
+          <div className="py-16 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 p-6">
+            <Award className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+            <h4 className="text-sm font-bold text-slate-700">No Completed Performance Evaluations Found</h4>
+            <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+              Performance Reviews & Evaluation only displays employees whose Performance Evaluation has been completed.
+              Once an employee's evaluation scorecard is submitted in the Performance Evaluation module, their record will automatically appear here.
             </p>
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('erp-module-context', {
+                    detail: { moduleId: 'kpi', action: 'performance-evaluation' }
+                  }));
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Go to Performance Evaluation</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-slate-200">
@@ -1198,9 +1227,15 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
               {/* Employee Selection with Advanced Filtering (Department, Supervisor, Search) */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700">
-                    Select Target Employees ({selectedEmpIds.length} of {authorizedEmployees.length} selected)
-                  </label>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700">
+                      Select Target Employees ({selectedEmpIds.length} of {employeesWithCompletedEvaluation.length} eligible staff)
+                    </label>
+                    <div className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Only staff with completed Performance Evaluation are eligible</span>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -1223,15 +1258,15 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
                     <button
                       type="button"
                       onClick={() => {
-                        if (selectedEmpIds.length === authorizedEmployees.length) {
+                        if (selectedEmpIds.length === employeesWithCompletedEvaluation.length) {
                           setSelectedEmpIds([]);
                         } else {
-                          setSelectedEmpIds(authorizedEmployees.map(e => e.id));
+                          setSelectedEmpIds(employeesWithCompletedEvaluation.map(e => e.id));
                         }
                       }}
                       className="text-[11px] font-medium text-slate-500 hover:text-slate-700 cursor-pointer"
                     >
-                      {selectedEmpIds.length === authorizedEmployees.length ? 'Clear All' : 'Select All'}
+                      {selectedEmpIds.length === employeesWithCompletedEvaluation.length ? 'Clear All' : 'Select All'}
                     </button>
                   </div>
                 </div>
@@ -1282,7 +1317,7 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
 
                   <div className="flex items-center justify-between text-[11px] text-slate-500 px-0.5">
                     <span>
-                      Showing <strong className="text-slate-700">{assignFilteredEmployees.length}</strong> matching staff
+                      Showing <strong className="text-slate-700">{assignFilteredEmployees.length}</strong> matching staff with completed evaluation
                     </span>
                     {(assignDeptFilter !== 'All' || assignSupervisorFilter !== 'All' || assignSearch) && (
                       <button
@@ -1302,13 +1337,29 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
 
                 {/* Filtered Employees Scroll List */}
                 <div className="max-h-52 overflow-y-auto border border-slate-200 rounded-2xl p-2 divide-y divide-slate-100 bg-slate-50/50">
-                  {assignFilteredEmployees.length === 0 ? (
+                  {employeesWithCompletedEvaluation.length === 0 ? (
+                    <div className="py-6 px-4 text-center text-xs text-slate-500 bg-amber-50/70 rounded-xl border border-amber-200/80">
+                      <AlertCircle className="w-5 h-5 text-amber-600 mx-auto mb-1.5" />
+                      <div className="font-bold text-slate-800">No Eligible Staff Found</div>
+                      <p className="text-[11px] text-slate-600 mt-1 max-w-sm mx-auto">
+                        No employees currently have completed Performance Evaluations. Please submit evaluation scorecards in the Performance Evaluation section first.
+                      </p>
+                    </div>
+                  ) : assignFilteredEmployees.length === 0 ? (
                     <div className="py-6 text-center text-xs text-slate-400">
-                      No employees match the selected department/supervisor filter.
+                      No eligible employees match the selected department/supervisor filter.
                     </div>
                   ) : (
                     assignFilteredEmployees.map(emp => {
                       const isChecked = selectedEmpIds.includes(emp.id);
+                      const normId = emp.id.trim().toUpperCase();
+                      const normName = emp.name.trim().toLowerCase();
+                      const empEval = evaluations.find(e => 
+                        isEvaluationCompleted(e) && (
+                          (e.employeeId && e.employeeId.trim().toUpperCase() === normId) ||
+                          (e.employeeName && e.employeeName.trim().toLowerCase() === normName)
+                        )
+                      );
                       return (
                         <label key={emp.id} className="flex items-center justify-between p-2 hover:bg-white rounded-xl transition cursor-pointer">
                           <div className="flex items-center gap-2.5 flex-1 min-w-0 pr-2">
@@ -1328,11 +1379,20 @@ export default function PerformanceReviews({ spreadsheetId, user, userSecuritySc
                               </div>
                             </div>
                           </div>
-                          {emp.supervisor && (
-                            <span className="shrink-0 text-[10px] bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded-md border border-slate-200">
-                              Sup: {emp.supervisor}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {empEval && (
+                              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>{Number(empEval.averageRating).toFixed(1)}★</span>
+                                <span className="hidden sm:inline">({empEval.ratingGrade || 'Completed'})</span>
+                              </span>
+                            )}
+                            {emp.supervisor && (
+                              <span className="text-[10px] bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded-md border border-slate-200">
+                                Sup: {emp.supervisor}
+                              </span>
+                            )}
+                          </div>
                         </label>
                       );
                     })
