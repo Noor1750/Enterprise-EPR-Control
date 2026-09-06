@@ -9,7 +9,7 @@ import {
   Employee, PerformanceEvaluationRecord, EvaluationScores, 
   EvaluationPeriodType, EVALUATION_CRITERIA_LIST, 
   calculateEvaluationSummary, calculateYearOfService, 
-  generateEvaluationPeriodOptions 
+  generateEvaluationPeriodOptions, resolveEvaluatorDisplayName 
 } from '../types';
 import PerformanceRatingScheme, { KPI_RATING_SCHEME } from './PerformanceRatingScheme';
 
@@ -56,7 +56,15 @@ export default function EvaluationForm({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Evaluator / Supervisor Directory Selection State
-  const [evaluatedBy, setEvaluatedBy] = useState<string>(initialData?.evaluatedBy || currentUserEmail);
+  const [evaluatedBy, setEvaluatedBy] = useState<string>(() => {
+    if (initialData?.evaluatedBy) {
+      return resolveEvaluatorDisplayName(initialData.evaluatedBy, allEmployees || employees, currentUserEmail);
+    }
+    if (userSecurityScope?.employeeName) {
+      return userSecurityScope.employeeName;
+    }
+    return resolveEvaluatorDisplayName('', allEmployees || employees, currentUserEmail);
+  });
   const [evaluatorSearchTerm, setEvaluatorSearchTerm] = useState<string>('');
   const [isEvaluatorDropdownOpen, setIsEvaluatorDropdownOpen] = useState<boolean>(false);
   const evaluatorDropdownRef = useRef<HTMLDivElement>(null);
@@ -154,17 +162,17 @@ export default function EvaluationForm({
       // Auto-assign supervisor if creating a new evaluation
       if (!initialData) {
         if (selectedEmployee.supervisor && selectedEmployee.supervisor.trim()) {
-          setEvaluatedBy(selectedEmployee.supervisor.trim());
+          setEvaluatedBy(resolveEvaluatorDisplayName(selectedEmployee.supervisor.trim(), directoryEmployees));
         } else if (selectedEmployee.manager && selectedEmployee.manager.trim()) {
-          setEvaluatedBy(selectedEmployee.manager.trim());
+          setEvaluatedBy(resolveEvaluatorDisplayName(selectedEmployee.manager.trim(), directoryEmployees));
         } else if (userSecurityScope?.employeeName) {
           setEvaluatedBy(userSecurityScope.employeeName);
         } else if (currentUserEmail) {
-          setEvaluatedBy(currentUserEmail);
+          setEvaluatedBy(resolveEvaluatorDisplayName(currentUserEmail, directoryEmployees));
         }
       }
     }
-  }, [selectedEmployee, initialData, userSecurityScope, currentUserEmail]);
+  }, [selectedEmployee, initialData, userSecurityScope, currentUserEmail, directoryEmployees]);
 
   // Load existing evaluation data if requested
   const handleLoadExistingEvaluation = (evalRecord: PerformanceEvaluationRecord) => {
@@ -181,7 +189,7 @@ export default function EvaluationForm({
     setRecommendation(evalRecord.recommendation || 'Regular Confirmed (Satisfactory Performance)');
     setComments(evalRecord.comments || '');
     setEvaluationDate(evalRecord.evaluationDate || new Date().toISOString().substring(0, 10));
-    setEvaluatedBy(evalRecord.evaluatedBy || currentUserEmail);
+    setEvaluatedBy(resolveEvaluatorDisplayName(evalRecord.evaluatedBy, directoryEmployees, currentUserEmail));
     if (evalRecord.dateJoined) setCustomDateJoined(evalRecord.dateJoined);
     if (evalRecord.yearOfService) setCustomYearOfService(evalRecord.yearOfService);
     setSuccessToast(`Loaded existing finalized evaluation (${evalRecord.period}) for ${evalRecord.employeeName}. You can now review or update it.`);
@@ -263,7 +271,7 @@ export default function EvaluationForm({
       periodKey: selectedPeriodKey,
       year: currentYear,
       evaluationDate,
-      evaluatedBy: evaluatedBy.trim() || 'Evaluator / Supervisor',
+      evaluatedBy: resolveEvaluatorDisplayName(evaluatedBy, directoryEmployees, currentUserEmail) || 'Evaluator / Supervisor',
       scores,
       totalScore: evaluationSummary.totalScore,
       totalPossible: evaluationSummary.totalPossible,

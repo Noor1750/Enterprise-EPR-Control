@@ -22,6 +22,7 @@ export interface SheetDefinition {
 export const SHEETS_CATALOG: SheetDefinition[] = [
   // 1. Employee & Org
   { id: 'Employees', name: 'Employees Directory', group: 'Employee & Org', description: 'Full master employee profiles, designations, salaries, shifts, and contact details.', dateColName: 'Date_of_Join' },
+  { id: 'EmployeePromotions', name: 'Employee Promotions & Career Progression', group: 'Employee & Org', description: 'Employee promotion records, year promoted, previous/new designations, increment % and official letters.', dateColName: 'Promotion_Date' },
   { id: 'Users', name: 'Users & Permissions (RBAC)', group: 'Employee & Org', description: 'System user access levels, assigned departments, input permissions, and security roles.', dateColName: 'None' },
   { id: 'Supervisors', name: 'Supervisors & Managers Org', group: 'Employee & Org', description: 'Departmental hierarchy, designated supervisors, and managerial mapping.', dateColName: 'None' },
   { id: 'SkillMatrix', name: 'Skill Matrix & Competency', group: 'Employee & Org', description: 'Machine operation skills, audit competencies, and operator proficiency levels.', dateColName: 'None' },
@@ -50,6 +51,7 @@ export const SHEETS_CATALOG: SheetDefinition[] = [
   { id: 'Tasks', name: 'Factory Task Tracker', group: 'Production & Machinery', description: 'Operational factory tasks, assignees, recurring frequencies, priorities, and completion progress.', dateColName: 'Start_Date' },
 
   // 4. Quality & 5S
+  { id: 'Gemba_Walks', name: 'Gemba Walk Floor Audits & Actions', group: 'Quality & 5S', description: '13-point smart floor audits, 5-why root cause findings, corrective actions, and overdue statuses.', dateColName: 'Date' },
   { id: 'BestPractices', name: 'Best Practices & Kaizen', group: 'Quality & 5S', description: 'Continuous improvement Kaizen suggestions, employee contributions, and verified cost savings in USD.', dateColName: 'Date' },
   { id: 'FiveS_Assessments', name: '5S Audit Assessments', group: 'Quality & 5S', description: 'Detailed 5S audit scores (Sort, Set In Order, Shine, Standardize, Sustain, Visual Management).', dateColName: 'Month' },
   { id: 'FiveS_CorrectiveActions', name: '5S Corrective Actions Log', group: 'Quality & 5S', description: 'Corrective action requests, root causes, assigned owners, target dates, and closure proof.', dateColName: 'Target_Date' },

@@ -42,8 +42,14 @@ interface UserManagementProps {
 
 const TAB_MODULES = [
   'Employee Directory',
+  'Employee Promotions',
+  'Daily Tasks',
+  'Gemba Walks',
+  '5S & Visual Management',
   'Monthly KPI',
+  'Performance Reviews',
   'Machine & Skills',
+  'Shift Assignments',
   'Leave Management',
   'Overtime',
   'Holidays',
@@ -56,8 +62,14 @@ const TAB_MODULES = [
 
 const EDIT_MODULES = [
   'Edit Employee Directory',
+  'Edit Employee Promotions',
+  'Edit Daily Tasks',
+  'Edit Gemba Walks',
+  'Edit 5S & Visual Management',
   'Edit Monthly KPI',
+  'Edit Performance Reviews',
   'Edit Machine & Skills',
+  'Edit Shift Assignments',
   'Edit Leave Management',
   'Edit Overtime',
   'Edit Holidays',
@@ -66,8 +78,12 @@ const EDIT_MODULES = [
 
 const UPLOAD_MODULES = [
   'Upload Employee Directory',
+  'Upload Daily Tasks',
+  'Upload Gemba Walks',
+  'Upload 5S & Visual Management',
   'Upload Monthly KPI',
   'Upload Machine & Skills',
+  'Upload Shift Assignments',
   'Upload Leave Management',
   'Upload Overtime',
   'Upload Holidays',
@@ -80,6 +96,9 @@ const INPUT_PERMISSIONS_OPTIONS = [
   { id: 'kpi', name: 'Monthly KPI Evaluations', desc: 'Score and evaluate staff monthly KPI' },
   { id: 'skills', name: 'Machine & Skill Matrix Mapping', desc: 'Assign machine skills and levels' },
   { id: 'tasks', name: 'Daily Task Assignments', desc: 'Create and assign tasks to staff' },
+  { id: 'gemba', name: 'Gemba Walk Floor Audits', desc: 'Conduct floor audits and track 5-Why root cause actions' },
+  { id: '5s', name: '5S Floor Audits & Actions', desc: 'Perform 5S evaluations and assign line leader actions' },
+  { id: 'promotions', name: 'Employee Promotion Records', desc: 'Promote employees, record promotion year, salary increments and titles' },
   { id: 'directory', name: 'Employee Profiles Modification', desc: 'Update staff directory fields' }
 ];
 

@@ -150,6 +150,7 @@ export const NAVIGATOR_PALETTE_MAP: Record<string, string> = {
 
   // 2. Dark Olive & Fresh Lemon
   'tasks': 'dark-olive-fresh-lemon',
+  'gemba-walks': 'ink-teal-warm-sand',
 
   // 3. Slate Ocean & Cloud Mint
   'machine': 'slate-ocean-cloud-mint',

@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 import { 
   PerformanceEvaluationRecord, EvaluationPeriodType, 
   EVALUATION_CRITERIA_LIST, generateEvaluationPeriodOptions,
-  isKpiHiddenForEmployee
+  isKpiHiddenForEmployee, resolveEvaluatorDisplayName
 } from '../types';
 
 interface EvaluationRecordsProps {
@@ -136,7 +136,7 @@ export default function EvaluationRecords({
       'Evaluation Type': r.evaluationType,
       'Period': r.period,
       'Evaluation Date': r.evaluationDate,
-      'Evaluated By': r.evaluatedBy,
+      'Evaluated By': resolveEvaluatorDisplayName(r.evaluatedBy),
       '1. Job Knowledge (1-5)': r.scores.jobKnowledge,
       '2. Output vs Target (1-5)': r.scores.quantityOfOutput,
       '3. Quality vs Target (1-5)': r.scores.qualityOfWork,
@@ -465,7 +465,17 @@ export default function EvaluationRecords({
                     {/* Period & Type */}
                     <td className="p-3 whitespace-nowrap">
                       <div className="font-semibold text-slate-900">{record.period}</div>
-                      <span className="text-[10px] text-slate-500">{record.evaluationType}</span>
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                        <span>{record.evaluationType}</span>
+                        {record.evaluatedBy && (
+                          <>
+                            <span>•</span>
+                            <span className="font-semibold text-emerald-700" title={`Evaluator: ${resolveEvaluatorDisplayName(record.evaluatedBy)}`}>
+                              By: {resolveEvaluatorDisplayName(record.evaluatedBy)}
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </td>
 
                     {/* Total Score / 50 */}

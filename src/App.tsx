@@ -390,7 +390,12 @@ export default function App() {
         setIsLoading(false);
       }
     } catch (err: any) {
-      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+      const errMsg = err?.message || err?.toString?.() || '';
+      if (
+        err?.code === 'auth/popup-closed-by-user' || 
+        err?.code === 'auth/cancelled-popup-request' ||
+        errMsg.includes('Pending promise was never set')
+      ) {
         setIsLoading(false);
       } else if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/network-request-failed') {
         setIsPopupBlocked(true);

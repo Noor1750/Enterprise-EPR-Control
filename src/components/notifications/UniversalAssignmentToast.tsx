@@ -52,10 +52,15 @@ export default function UniversalAssignmentToast({
       const cleanNotifAssigneeId = (notif.assigneeId || '').toUpperCase().trim();
       const cleanNotifAssigneeName = (notif.assigneeName || '').toLowerCase().trim();
 
-      // Ensure this notification belongs to the currently logged in employee
+      // Robust matching between notification assignee and active user profile
       const matchesUser = 
-        (cleanMyId && cleanNotifAssigneeId && cleanMyId === cleanNotifAssigneeId) ||
-        (cleanMyName && cleanNotifAssigneeName && cleanNotifAssigneeName.includes(cleanMyName));
+        Boolean(
+          (cleanMyId && cleanNotifAssigneeId && cleanMyId === cleanNotifAssigneeId) ||
+          (cleanMyName && cleanNotifAssigneeName && (
+            cleanNotifAssigneeName.includes(cleanMyName) || 
+            cleanMyName.includes(cleanNotifAssigneeName)
+          ))
+        );
 
       if (matchesUser) {
         // Play notification sound

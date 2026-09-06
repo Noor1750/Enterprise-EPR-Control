@@ -281,6 +281,7 @@ export function playTaskAssignedSound(preferredSound?: TaskSoundType, volume: nu
 
 export type UniversalAssignmentModule = 
   | 'tasks'
+  | 'gemba-walks'
   | 'leave'
   | 'kpi'
   | '5s-management'
@@ -381,6 +382,15 @@ export function playUniversalAssignmentSound(
           { freq: 880.00, delay: 0.00, dur: 0.25, vol: 0.6, type: 'sine' },
           { freq: 1174.66, delay: 0.08, dur: 0.30, vol: 0.7, type: 'triangle' },
           { freq: 1760.00, delay: 0.17, dur: 0.85, vol: 0.85, type: 'sine' },
+        ];
+        break;
+
+      case 'gemba-walks':
+        // Focused inspection chime
+        notes = [
+          { freq: 587.33, delay: 0.00, dur: 0.30, vol: 0.65, type: 'triangle' },
+          { freq: 880.00, delay: 0.10, dur: 0.35, vol: 0.75, type: 'sine' },
+          { freq: 1174.66, delay: 0.20, dur: 0.80, vol: 0.85, type: 'sine' },
         ];
         break;
 

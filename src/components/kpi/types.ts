@@ -614,3 +614,54 @@ export function generateEvaluationPeriodOptions(currentYear = new Date().getFull
 
   return options;
 }
+
+/**
+ * Resolves an evaluator identifier (which might be an email address or username)
+ * into a human-readable supervisor/manager display name.
+ */
+export function resolveEvaluatorDisplayName(
+  evaluatorRaw: string | undefined | null,
+  employees: Employee[] | any[] = [],
+  fallbackEmailOrUser?: string
+): string {
+  const target = (evaluatorRaw || fallbackEmailOrUser || '').trim();
+  if (!target) return 'Supervisor / Evaluator';
+
+  // If it does NOT contain an '@', it is already a formatted name
+  if (!target.includes('@')) {
+    return target;
+  }
+
+  // 1. Search employees array by email or ID
+  const lowerTarget = target.toLowerCase();
+  const matchedEmp = employees.find(emp => {
+    if (!emp) return false;
+    const empEmail = typeof emp === 'object' && !Array.isArray(emp)
+      ? (emp.email || '')
+      : (Array.isArray(emp) ? String(emp[1] || '') : '');
+    const empId = typeof emp === 'object' && !Array.isArray(emp)
+      ? (emp.id || '')
+      : (Array.isArray(emp) ? String(emp[0] || '') : '');
+    return (empEmail && empEmail.toLowerCase() === lowerTarget) || (empId && empId.toLowerCase() === lowerTarget);
+  });
+
+  if (matchedEmp) {
+    const name = typeof matchedEmp === 'object' && !Array.isArray(matchedEmp)
+      ? matchedEmp.name
+      : (Array.isArray(matchedEmp) ? String(matchedEmp[2] || matchedEmp[1] || '') : '');
+    if (name && name.trim()) return name.trim();
+  }
+
+  // 2. Format email username portion into a proper title-cased name
+  // e.g. "sarah.connor@gmail.com" -> "Sarah Connor"
+  const prefix = target.split('@')[0];
+  const cleaned = prefix
+    .replace(/[._-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+
+  return cleaned || target;
+}
+

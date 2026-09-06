@@ -75,6 +75,7 @@ export const ALL_SYSTEM_MODULES = [
   { id: 'breakdown', name: 'Breakdown Log', category: 'Production & Engineering' },
   { id: 'kpi', name: 'KPI Performance', category: 'Performance' },
   { id: 'fives', name: '5S & Visual Management', category: 'Quality & Operations' },
+  { id: 'gemba', name: 'Gemba Walks', category: 'Quality & Operations' },
   { id: 'practices', name: 'Best Practices', category: 'Quality & Operations' },
   { id: 'reports', name: 'Reports & Export', category: 'Analytics' },
   { id: 'navigator', name: 'Navigator Settings', category: 'System Navigation' },

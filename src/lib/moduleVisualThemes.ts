@@ -10,6 +10,7 @@ import {
   Clock, 
   Bell,
   Wrench,
+  Eye,
   LucideIcon
 } from 'lucide-react';
 import { AssignmentModuleType } from './universalAssignmentNotifier';
@@ -81,6 +82,17 @@ export const MODULE_THEMES: Record<AssignmentModuleType, ModuleTheme> = {
     toastGradient: 'from-amber-500 to-orange-600',
     accentColor: 'text-amber-600',
     modalGradient: 'from-slate-900 via-amber-950 to-slate-900'
+  },
+  'gemba-walks': {
+    name: 'Gemba Walks',
+    navigatorId: 'gemba-walks',
+    icon: Eye,
+    badgeBg: 'bg-rose-500/10',
+    badgeText: 'text-rose-700 dark:text-rose-400',
+    badgeBorder: 'border-rose-500/30',
+    toastGradient: 'from-rose-600 to-red-700',
+    accentColor: 'text-rose-600',
+    modalGradient: 'from-slate-900 via-rose-950 to-slate-900'
   },
   '5s-management': {
     name: '5S & Visual Mgmt',

@@ -38,6 +38,12 @@ import FiveSCorrectiveActionModal from './fiveS/FiveSCorrectiveActionModal';
 import FiveSTVDisplayBoard from './fiveS/FiveSTVDisplayBoard';
 import FiveSSettingsTab from './fiveS/FiveSSettingsTab';
 import { 
+  GembaWalkItem, 
+  getLocalGembaWalkItems, 
+  saveLocalGembaWalkItems,
+  dispatchGembaAssignmentNotification
+} from '../lib/gembaWalkEngine';
+import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, 
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, 
   PieChart, Pie, Cell 
@@ -47,6 +53,7 @@ interface FiveSManagementProps {
   spreadsheetId: string;
   user: User;
   userSecurityScope?: UserSecurityScope;
+  onNavigate?: (module: string) => void;
 }
 
 type TabType = 'overview' | 'assessments' | 'leaderboard' | 'actions' | 'departments' | 'settings';
@@ -54,7 +61,8 @@ type TabType = 'overview' | 'assessments' | 'leaderboard' | 'actions' | 'departm
 export default function FiveSManagement({
   spreadsheetId,
   user,
-  userSecurityScope
+  userSecurityScope,
+  onNavigate
 }: FiveSManagementProps) {
   const currentMonthStr = useMemo(() => format(new Date(), 'yyyy-MM'), []);
   const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
@@ -70,6 +78,7 @@ export default function FiveSManagement({
   const [correctiveActions, setCorrectiveActions] = useState<FiveSCorrectiveAction[]>([]);
   const [winners, setWinners] = useState<FiveSWinner[]>([]);
   const [settings, setSettings] = useState<FiveSSettingsConfig>(getFiveSSettings());
+  const [gembaWalkItems, setGembaWalkItems] = useState<GembaWalkItem[]>(() => getLocalGembaWalkItems());
 
   // Modals State
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState<boolean>(false);
@@ -192,7 +201,9 @@ export default function FiveSManagement({
             createdBy: String(row[29] || '').trim(),
             createdAt: String(row[30] || '').trim(),
             updatedBy: String(row[31] || '').trim(),
-            updatedAt: String(row[32] || '').trim()
+            updatedAt: String(row[32] || '').trim(),
+            areaLeaderName: String(row[33] || '').trim(),
+            lineLeaderName: String(row[33] || '').trim()
           };
         }).filter(a => a.id);
         setAssessments(loadedAssessments);
@@ -262,6 +273,13 @@ export default function FiveSManagement({
   useEffect(() => {
     loadData();
 
+    const handleGembaSync = (e: any) => {
+      if (Array.isArray(e.detail)) {
+        setGembaWalkItems(e.detail);
+      }
+    };
+    window.addEventListener('erp-gemba-walk-updated', handleGembaSync);
+
     const handleContext = (e: any) => {
       if (e.detail?.moduleId === '5s-management') {
         if (e.detail.action === 'new-audit') {
@@ -274,7 +292,10 @@ export default function FiveSManagement({
       }
     };
     window.addEventListener('erp-module-context', handleContext);
-    return () => window.removeEventListener('erp-module-context', handleContext);
+    return () => {
+      window.removeEventListener('erp-gemba-walk-updated', handleGembaSync);
+      window.removeEventListener('erp-module-context', handleContext);
+    };
   }, [spreadsheetId]);
 
   // Security Scoped Filter: Filter records based on role / scope
@@ -457,7 +478,8 @@ export default function FiveSManagement({
         assessment.createdBy,
         assessment.createdAt,
         assessment.updatedBy,
-        assessment.updatedAt
+        assessment.updatedAt,
+        assessment.lineLeaderName || assessment.areaLeaderName || ''
       ];
 
       if (existingIdx >= 0) {
@@ -466,11 +488,11 @@ export default function FiveSManagement({
         updated[existingIdx] = assessment;
         setAssessments(updated);
         // Update row (+2 for 1-based header)
-        await updateRange(spreadsheetId, `FiveS_Assessments!A${existingIdx + 2}:AG${existingIdx + 2}`, [rowData]);
+        await updateRange(spreadsheetId, `FiveS_Assessments!A${existingIdx + 2}:AH${existingIdx + 2}`, [rowData]);
       } else {
         // Append
         setAssessments(prev => [assessment, ...prev]);
-        await appendRow(spreadsheetId, 'FiveS_Assessments!A:AG', [rowData]);
+        await appendRow(spreadsheetId, 'FiveS_Assessments!A:AH', [rowData]);
       }
 
       // Save any spawned corrective actions
@@ -754,33 +776,54 @@ export default function FiveSManagement({
         </div>
       </div>
 
-      {/* Sub-Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1 text-xs font-bold">
-        {[
-          { id: 'overview', label: 'Overview & Analytics', icon: BarChart3 },
-          { id: 'assessments', label: `Assessments Log (${scopedAssessments.length})`, icon: CheckSquare },
-          { id: 'leaderboard', label: 'Top 3 Best 5S Champions', icon: Award },
-          { id: 'actions', label: `Corrective Actions (${correctiveActions.length})`, icon: ShieldCheck },
-          { id: 'departments', label: 'Department Matrix', icon: Building },
-          { id: 'settings', label: 'Formula & Settings', icon: Sliders },
-        ].map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as TabType)}
-              className={`px-4 py-2.5 rounded-xl transition flex items-center gap-2 whitespace-nowrap ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+      {/* Sub-Navigation Tabs Navigator (Smart White Container) */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2 overflow-x-auto">
+        <div className="flex items-center gap-1.5 min-w-max">
+          {[
+            { id: 'overview', label: 'Overview & Analytics', icon: BarChart3, count: null },
+            { id: 'assessments', label: 'Assessments Log', icon: CheckSquare, count: scopedAssessments.length },
+            { id: 'leaderboard', label: 'Top 3 Champions', icon: Award, count: null },
+            { id: 'actions', label: 'Corrective Actions', icon: ShieldCheck, count: correctiveActions.length },
+            { id: 'departments', label: 'Dept Matrix', icon: Building, count: null },
+            { id: 'settings', label: 'Formula & Settings', icon: Sliders, count: null },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as TabType)}
+                className={`relative px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-150 flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? 'bg-slate-900 text-white shadow-xs ring-2 ring-slate-900/10'
+                    : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 border border-transparent'
+                }`}
+              >
+                <Icon className={`w-4 h-4 transition-transform ${isActive ? 'scale-110' : ''} ${
+                  isActive ? 'text-white' : 'text-slate-500'
+                }`} />
+                <span>{tab.label}</span>
+                {typeof tab.count === 'number' && (
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full transition-colors ${
+                    isActive
+                      ? 'bg-white/20 text-white border border-white/30'
+                      : 'bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Live Navigator Status Badge */}
+        <div className="hidden xl:flex items-center gap-2.5 pl-3 pr-2 border-l border-slate-200 shrink-0 text-2xs">
+          <div className="flex items-center gap-1.5 text-slate-600 font-bold">
+            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+            <span>5S & Kaizen Continuous Improvement</span>
+          </div>
+        </div>
       </div>
 
       {/* TAB 1: OVERVIEW & DASHBOARD */}
@@ -788,8 +831,30 @@ export default function FiveSManagement({
         <div className="space-y-6">
           
           {/* Top KPI Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             
+            {/* Gemba Walk Audits */}
+            <div 
+              onClick={() => onNavigate ? onNavigate('gemba-walks') : window.dispatchEvent(new CustomEvent('erp-open-navigator', { detail: { id: 'gemba-walks' } }))}
+              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between cursor-pointer hover:border-rose-400 hover:shadow-sm transition group"
+              title="Open Gemba Walks Navigator"
+            >
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block group-hover:text-rose-600 transition">Gemba Walks</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-600 border border-rose-200">Main Navigator</span>
+                </div>
+                <span className="text-2xl font-black text-slate-900 mt-1 block">{gembaWalkItems.length}</span>
+                <span className="text-[11px] text-rose-600 font-semibold mt-0.5 flex items-center gap-0.5">
+                  <span>{gembaWalkItems.filter(i => i.status === 'Open' || i.status === 'In Progress').length} Active Findings</span>
+                  <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-600 group-hover:text-white transition shadow-xs">
+                <Eye className="w-6 h-6" />
+              </div>
+            </div>
+
             {/* Audits Completed */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between">
               <div>
@@ -799,7 +864,7 @@ export default function FiveSManagement({
                   Out of {employees.length} Master Employees
                 </span>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
                 <CheckSquare className="w-6 h-6" />
               </div>
             </div>
@@ -1290,7 +1355,12 @@ export default function FiveSManagement({
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-slate-700 block">{audit.shift}</span>
-                          <span className="text-[10px] text-slate-400">Sup: {audit.supervisorName}</span>
+                          <span className="text-[10px] text-slate-400 block">Sup: {audit.supervisorName}</span>
+                          {(audit.lineLeaderName || audit.areaLeaderName) && (
+                            <span className="text-[10px] font-semibold text-blue-600 block truncate max-w-[130px]" title={audit.lineLeaderName || audit.areaLeaderName}>
+                              5S: {audit.lineLeaderName || audit.areaLeaderName}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center font-semibold text-slate-700">{audit.sortScore}%</td>
                         <td className="px-4 py-3 text-center font-semibold text-slate-700">{audit.setInOrderScore}%</td>

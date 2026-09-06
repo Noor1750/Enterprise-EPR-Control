@@ -7,7 +7,7 @@ import {
   MapPin, Shield, CheckCircle2, History, ExternalLink, CornerDownLeft,
   Filter, Eye, Hash, ArrowUp, ArrowDown, Building2, Sun, Moon,
   Palette, FileSpreadsheet, UserCheck, Flame, HeartHandshake,
-  Layers, Zap, Star, PartyPopper, Cake
+  Layers, Zap, Star, PartyPopper, Cake, TrendingUp
 } from 'lucide-react';
 import { EmployeeShiftState, ShiftType, getShiftBadgeStyles, getShiftModeBadgeStyles } from '../../lib/shiftEngine';
 import { UserSecurityScope, canUserPerformAction } from '../../lib/security';
@@ -79,6 +79,16 @@ const SYSTEM_NAVIGATION_ITEMS: NavigationItem[] = [
     badge: 'Operations'
   },
   {
+    id: 'gemba-walks',
+    name: 'Gemba Walks Navigator',
+    category: 'Operations',
+    description: '13-Point Smart Floor Audits, 5-Why Root Cause, Before & After Photos & Action Tracking',
+    icon: Eye,
+    moduleName: 'All',
+    keywords: ['gemba', 'walk', 'audit', '5-why', 'photo', 'muda', 'waste', 'hazard', 'shop floor', 'finding', 'action'],
+    badge: 'Operations'
+  },
+  {
     id: '5s-management',
     name: '5S & Visual Management',
     category: 'Quality & Standards',
@@ -107,6 +117,16 @@ const SYSTEM_NAVIGATION_ITEMS: NavigationItem[] = [
     moduleName: 'Employee Directory',
     keywords: ['staff', 'employee', 'roster', 'worker', 'personnel', 'profile', 'contacts', 'phone', 'team', 'hr'],
     badge: 'Staff'
+  },
+  {
+    id: 'promotions',
+    name: 'Promotions & Career Progression',
+    category: 'Human Resources',
+    description: 'Promote staff, record career upgrades, generate official appointment letters, salary increments & history',
+    icon: TrendingUp,
+    moduleName: 'Employee Directory',
+    keywords: ['promotion', 'promote', 'career', 'advancement', 'upgrade', 'designation', 'salary', 'increment', 'grade', 'letter'],
+    badge: 'Career'
   },
   {
     id: 'anniversaries',
@@ -222,6 +242,17 @@ const SYSTEM_NAVIGATION_ITEMS: NavigationItem[] = [
 
 const QUICK_ACTIONS: QuickActionItem[] = [
   {
+    id: 'action-record-promotion',
+    name: 'Record Employee Promotion & Upgrade',
+    category: 'Quick Action',
+    description: 'Promote employee to new designation, record increment, and issue appointment letter',
+    icon: TrendingUp,
+    targetModule: 'promotions',
+    actionContext: { action: 'record-promotion' },
+    keywords: ['promote employee', 'record promotion', 'career upgrade', 'salary increment', 'promotion letter'],
+    badge: 'HR'
+  },
+  {
     id: 'action-create-task',
     name: 'Create New Daily Task',
     category: 'Quick Action',
@@ -253,6 +284,17 @@ const QUICK_ACTIONS: QuickActionItem[] = [
     actionContext: { action: 'log-breakdown' },
     keywords: ['log breakdown', 'machine broken', 'report issue', 'equipment down', 'maintenance emergency'],
     badge: 'Maintenance'
+  },
+  {
+    id: 'action-gemba-walk',
+    name: 'Log Gemba Walk Finding',
+    category: 'Quick Action',
+    description: 'Record shop floor visual finding, photo proof, 5-Why root cause & immediate countermeasure',
+    icon: Eye,
+    targetModule: 'gemba-walks',
+    actionContext: { action: 'new-gemba' },
+    keywords: ['gemba', 'gemba walk', 'shop floor walk', 'muda', 'safety finding', 'hazard', 'observation'],
+    badge: 'Gemba'
   },
   {
     id: 'action-5s-audit',

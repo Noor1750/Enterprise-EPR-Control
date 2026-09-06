@@ -1,6 +1,7 @@
 import { 
   Target, Menu, CheckSquare, Users, Wrench, AlertTriangle, 
-  Calendar, Clock, Award, Briefcase, DownloadCloud, Settings, Sparkles, Eye, LucideIcon 
+  Calendar, Clock, Award, Briefcase, DownloadCloud, Settings, Sparkles, Eye, LucideIcon,
+  TrendingUp, FileCheck2, HardDrive, ShieldCheck, UserCheck, PartyPopper, User
 } from 'lucide-react';
 import { UserSecurityScope } from './security';
 
@@ -31,6 +32,15 @@ export const DEFAULT_SYSTEM_NAVIGATORS: SystemNavigator[] = [
     description: 'Daily Task Dispatching, Priorities, Checklist Management & Job Orders',
     category: 'Operations',
     iconName: 'CheckSquare',
+    status: 'Active'
+  },
+  {
+    id: 'gemba-walks',
+    name: 'Gemba Walks Navigator',
+    moduleName: 'All',
+    description: '13-Point Smart Floor Audits, 5-Why Root Cause, Before & After Photos & Action Tracking',
+    category: 'Operations',
+    iconName: 'Eye',
     status: 'Active'
   },
   {
@@ -142,6 +152,42 @@ export const DEFAULT_SYSTEM_NAVIGATORS: SystemNavigator[] = [
     status: 'Active'
   },
   {
+    id: 'promotions',
+    name: 'Employee Promotions & Career Progression',
+    moduleName: 'Employee Directory',
+    description: 'Staff Promotions Record, Promotion Year Tracking, Designations, Salary Increments & Official Letter Generation',
+    category: 'Human Resources',
+    iconName: 'TrendingUp',
+    status: 'Active'
+  },
+  {
+    id: 'reviews',
+    name: 'Performance Reviews & Appraisals',
+    moduleName: 'KPI Performance',
+    description: 'Structured Appraisal Cycles, Formal Review Meetings, Promotion Reviews & Progression History',
+    category: 'Analytics & Quality',
+    iconName: 'FileCheck2',
+    status: 'Active'
+  },
+  {
+    id: '5s-leaders',
+    name: '5S Area & Line Leaders Directory',
+    moduleName: '5S & Visual Management',
+    description: '5S Work Area Mapping, Dedicated Line Leaders, Contact Details & Inspection Routing',
+    category: 'Analytics & Quality',
+    iconName: 'ShieldCheck',
+    status: 'Active'
+  },
+  {
+    id: 'storage-cleanup',
+    name: 'Drive Storage & Historical Data Cleanup',
+    moduleName: 'Settings',
+    description: 'Google Drive Storage Consumption Visibility, Health Monitoring & Date-Range Record Purge Tool',
+    category: 'System Administration',
+    iconName: 'HardDrive',
+    status: 'Active'
+  },
+  {
     id: 'contact-portfolio',
     name: 'Developer Contact',
     moduleName: 'All',
@@ -191,6 +237,13 @@ export function getNavigatorIcon(iconName: string): LucideIcon {
     case 'Settings': return Settings;
     case 'Sparkles': return Sparkles;
     case 'Eye': return Eye;
+    case 'TrendingUp': return TrendingUp;
+    case 'FileCheck2': return FileCheck2;
+    case 'HardDrive': return HardDrive;
+    case 'ShieldCheck': return ShieldCheck;
+    case 'PartyPopper': return PartyPopper;
+    case 'User': return User;
+    case 'UserCheck': return UserCheck;
     default: return Menu;
   }
 }

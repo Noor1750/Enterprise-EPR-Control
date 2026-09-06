@@ -3,7 +3,7 @@ import {
   X, Printer, Award, Calendar, User, Building, 
   Briefcase, Clock, CheckCircle2, Star, FileText, Lock, ShieldAlert 
 } from 'lucide-react';
-import { PerformanceEvaluationRecord, EVALUATION_CRITERIA_LIST, isKpiHiddenForEmployee } from '../types';
+import { PerformanceEvaluationRecord, EVALUATION_CRITERIA_LIST, isKpiHiddenForEmployee, resolveEvaluatorDisplayName } from '../types';
 import { KPI_RATING_SCHEME } from './PerformanceRatingScheme';
 
 interface EvaluationSlipModalProps {
@@ -21,6 +21,7 @@ export default function EvaluationSlipModal({
 }: EvaluationSlipModalProps) {
   const isHidden = isKpiHiddenForEmployee(evaluation.employeeId, hiddenEmployeeIds);
   const isAccessDenied = isHidden && !isAdmin;
+  const evaluatorDisplayName = resolveEvaluatorDisplayName(evaluation.evaluatedBy);
 
   const handlePrint = () => {
     if (isAccessDenied) return;
@@ -134,7 +135,7 @@ export default function EvaluationSlipModal({
             </div>
             <div>
               <span className="text-slate-500 block">Evaluated By</span>
-              <strong className="text-slate-800">{evaluation.evaluatedBy || 'Management / Supervisor'}</strong>
+              <strong className="text-slate-800">{evaluatorDisplayName}</strong>
             </div>
           </div>
 
@@ -285,7 +286,7 @@ export default function EvaluationSlipModal({
             </div>
             <div>
               <div className="border-t border-slate-400 pt-2 font-semibold text-slate-800">
-                {evaluation.evaluatedBy || 'Supervisor / Manager'}
+                {evaluatorDisplayName}
               </div>
               <p className="text-[10px] text-slate-500">Evaluator / Supervisor</p>
             </div>

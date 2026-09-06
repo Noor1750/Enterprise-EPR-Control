@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Save, RefreshCw, Plus, Trash2, Sliders, ShieldCheck, 
-  Award, Check, AlertTriangle, HelpCircle, Layers, CheckSquare
+  Award, Check, AlertTriangle, HelpCircle, Layers, CheckSquare, Users, MapPin
 } from 'lucide-react';
 import { 
   FiveSSettingsConfig, 
@@ -9,7 +9,8 @@ import {
   FIVE_S_CATEGORIES, 
   FiveSCategoryKey, 
   saveFiveSSettings, 
-  getFiveSSettings 
+  getFiveSSettings,
+  DEFAULT_FIVE_S_SETTINGS
 } from '../../lib/fiveSEngine';
 
 interface FiveSSettingsTabProps {
@@ -23,9 +24,38 @@ export default function FiveSSettingsTab({
   onSaveSettings,
   canConfigure
 }: FiveSSettingsTabProps) {
-  const [formData, setFormData] = useState<FiveSSettingsConfig>(settings);
+  const [formData, setFormData] = useState<FiveSSettingsConfig>({
+    ...settings,
+    areaLineLeaders: settings.areaLineLeaders || DEFAULT_FIVE_S_SETTINGS.areaLineLeaders || []
+  });
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<FiveSCategoryKey>('sort');
   const [isSaved, setIsSaved] = useState(false);
+
+  const handleAddAreaLeader = () => {
+    const newLeader = {
+      id: `all-${Date.now().toString().slice(-6)}`,
+      areaName: 'New Shop Floor Area / Line',
+      lineLeaderName: 'Designated Leader'
+    };
+    setFormData(prev => ({
+      ...prev,
+      areaLineLeaders: [...(prev.areaLineLeaders || []), newLeader]
+    }));
+  };
+
+  const handleUpdateAreaLeader = (id: string, field: 'areaName' | 'lineLeaderName', value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      areaLineLeaders: (prev.areaLineLeaders || []).map(l => l.id === id ? { ...l, [field]: value } : l)
+    }));
+  };
+
+  const handleRemoveAreaLeader = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      areaLineLeaders: (prev.areaLineLeaders || []).filter(l => l.id !== id)
+    }));
+  };
 
   const handle5SWeightChange = (new5SWeight: number) => {
     const safe5S = Math.max(0, Math.min(100, new5SWeight));
@@ -226,13 +256,83 @@ export default function FiveSSettingsTab({
         </div>
       </div>
 
+      {/* 5S Designated Area / Line Leaders Directory */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <Users className="w-4 h-4 text-blue-500" />
+              3. 5S Area & Line Leaders Directory ({(formData.areaLineLeaders || []).length} Areas)
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Assign dedicated 5S Line Leaders for shop floor areas. These leaders are auto-linked during 5S audit evaluations and displayed on the factory visual board.
+            </p>
+          </div>
+
+          {canConfigure && (
+            <button
+              type="button"
+              onClick={handleAddAreaLeader}
+              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Area / Line Leader</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+          {(formData.areaLineLeaders || []).map((leader) => (
+            <div key={leader.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">Area / Line Name</label>
+                  <input
+                    type="text"
+                    disabled={!canConfigure}
+                    value={leader.areaName}
+                    onChange={(e) => handleUpdateAreaLeader(leader.id, 'areaName', e.target.value)}
+                    className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g. Sewing Line 1"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">Line Leader's Name</label>
+                  <input
+                    type="text"
+                    disabled={!canConfigure}
+                    value={leader.lineLeaderName}
+                    onChange={(e) => handleUpdateAreaLeader(leader.id, 'lineLeaderName', e.target.value)}
+                    className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g. Mamunur Rashid"
+                  />
+                </div>
+              </div>
+              {canConfigure && (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAreaLeader(leader.id)}
+                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition shrink-0"
+                  title="Remove Area Leader"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Checklist Criteria Item Manager */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
               <CheckSquare className="w-4 h-4 text-blue-500" />
-              3. Checklist Item Criteria by 5S Pillar ({formData.checklistCriteria.length} items total)
+              4. Checklist Item Criteria by 5S Pillar ({formData.checklistCriteria.length} items total)
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Customize standard audit questions, requirements, max scores, and critical flags.

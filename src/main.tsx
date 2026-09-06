@@ -4,14 +4,18 @@ import App from './App.tsx';
 import './index.css';
 
 // Guard against browser iframe transient IndexedDB 'Database is closing/hidden' events
+// and Firebase Auth internal assertion bug 'INTERNAL ASSERTION FAILED: Pending promise was never set'
 if (typeof window !== 'undefined') {
-  const isTransientDbClosing = (err: any): boolean => {
+  const isIgnorableAuthOrDbError = (err: any): boolean => {
     if (!err) return false;
     const msg = (typeof err === 'string' ? err : err.message || err.name || err.toString?.() || '').toLowerCase();
     const reason = (err.reason && (typeof err.reason === 'string' ? err.reason : err.reason?.message || err.reason?.name || err.reason?.toString?.() || ''))?.toLowerCase() || '';
     const stack = (err.stack || '')?.toLowerCase?.() || '';
     
     return (
+      msg.includes('pending promise was never set') ||
+      reason.includes('pending promise was never set') ||
+      stack.includes('pending promise was never set') ||
       msg.includes('database is closing') ||
       msg.includes('database is hidden') ||
       msg.includes('closing/hidden') ||
@@ -32,8 +36,19 @@ if (typeof window !== 'undefined') {
     );
   };
 
+  // Filter out internal Firebase Auth assertion error from console.error to avoid false alarm logs
+  const originalConsoleError = console.error;
+  console.error = (...args: any[]) => {
+    const fullText = args.map(a => (typeof a === 'string' ? a : a?.message || a?.toString?.() || '')).join(' ');
+    if (fullText.includes('Pending promise was never set')) {
+      console.warn('Suppressed Firebase Auth internal assertion warning:', fullText);
+      return;
+    }
+    originalConsoleError.apply(console, args);
+  };
+
   const handleRejection = (event: PromiseRejectionEvent) => {
-    if (isTransientDbClosing(event.reason)) {
+    if (isIgnorableAuthOrDbError(event.reason)) {
       event.preventDefault?.();
       event.stopPropagation?.();
       event.stopImmediatePropagation?.();
@@ -43,7 +58,7 @@ if (typeof window !== 'undefined') {
   };
 
   const handleError = (event: ErrorEvent) => {
-    if (isTransientDbClosing(event.error) || isTransientDbClosing(event.message)) {
+    if (isIgnorableAuthOrDbError(event.error) || isIgnorableAuthOrDbError(event.message)) {
       event.preventDefault?.();
       event.stopPropagation?.();
       event.stopImmediatePropagation?.();

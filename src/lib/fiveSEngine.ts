@@ -46,6 +46,8 @@ export interface FiveSAssessment {
   supervisorName: string;
   managerName: string;
   shift: string;
+  areaLeaderName?: string; // 5S Area or Line Leader Name
+  lineLeaderName?: string; // 5S Area or Line Leader Name
   assessorId: string;
   assessorName: string;
   assessorEmail?: string;
@@ -165,6 +167,7 @@ export interface FiveSSettingsConfig {
     correctiveActionOverdue: boolean;
     winnersDeclared: boolean;
   };
+  areaLineLeaders?: { id: string; areaName: string; lineLeaderName: string; contact?: string }[];
 }
 
 export const FIVE_S_CATEGORIES: FiveSCategoryMeta[] = [
@@ -436,7 +439,16 @@ export const DEFAULT_FIVE_S_SETTINGS: FiveSSettingsConfig = {
     lowScoreThreshold: 70,
     correctiveActionOverdue: true,
     winnersDeclared: true
-  }
+  },
+  areaLineLeaders: [
+    { id: 'all-1', areaName: 'Cutting Floor & Pre-shrinking', lineLeaderName: 'Mamunur Rashid' },
+    { id: 'all-2', areaName: 'Sewing Line 1 - Heavy Trims', lineLeaderName: 'Md. Rakib & Jewel' },
+    { id: 'all-3', areaName: 'Sewing Line 2 - Light Trims', lineLeaderName: 'Tarak Rahman' },
+    { id: 'all-4', areaName: 'Printing & Curing Department', lineLeaderName: 'Mohammad Rahim & Turab' },
+    { id: 'all-5', areaName: 'Finishing, QC & Packing Bay', lineLeaderName: 'Md. Noor Alam & Shakil' },
+    { id: 'all-6', areaName: 'Maintenance Workshop & Tool Crib', lineLeaderName: 'Turab Ali & Alam' },
+    { id: 'all-7', areaName: 'Raw Material & Yarn Warehouse', lineLeaderName: 'Shakil Ahmed' }
+  ]
 };
 
 const SETTINGS_KEY = 'erp_5s_settings_config';

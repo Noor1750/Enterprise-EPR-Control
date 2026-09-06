@@ -77,16 +77,37 @@ export function getNormalizedEmpKey(empId?: string, empName?: string): string {
 }
 
 /**
- * Get all notifications for an employee
+ * Get all notifications for an employee with bidirectional key lookup
  */
 export function getUniversalNotifications(empId?: string, empName?: string): UniversalAssignmentNotification[] {
   if (typeof window === 'undefined') return [];
-  const key = `${STORAGE_PREFIX_NOTIFS}${getNormalizedEmpKey(empId, empName)}`;
+  const primaryKey = `${STORAGE_PREFIX_NOTIFS}${getNormalizedEmpKey(empId, empName)}`;
   try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const raw = localStorage.getItem(primaryKey);
+    let list: UniversalAssignmentNotification[] = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) list = [];
+
+    // Check alternate name-based key if empId was given to merge any recorded items
+    if (empId && empName) {
+      const altKey = `${STORAGE_PREFIX_NOTIFS}${getNormalizedEmpKey(undefined, empName)}`;
+      if (altKey !== primaryKey) {
+        const altRaw = localStorage.getItem(altKey);
+        if (altRaw) {
+          const altParsed = JSON.parse(altRaw);
+          if (Array.isArray(altParsed)) {
+            const idMap = new Map<string, UniversalAssignmentNotification>();
+            list.forEach(n => idMap.set(n.id, n));
+            altParsed.forEach(n => {
+              if (!idMap.has(n.id)) idMap.set(n.id, n);
+            });
+            list = Array.from(idMap.values());
+          }
+        }
+      }
+    }
+    // Sort by newest assigned first
+    list.sort((a, b) => new Date(b.assignedAt || 0).getTime() - new Date(a.assignedAt || 0).getTime());
+    return list;
   } catch (e) {
     console.warn('Failed to parse universal notifications:', e);
     return [];
@@ -101,7 +122,7 @@ export function getAssignmentNotifications(empId?: string, empName?: string): Un
 }
 
 /**
- * Save notifications for an employee
+ * Save notifications for an employee with dual-key synchronization
  */
 export function saveUniversalNotifications(
   empId: string | undefined, 
@@ -109,11 +130,19 @@ export function saveUniversalNotifications(
   notifs: UniversalAssignmentNotification[]
 ): void {
   if (typeof window === 'undefined') return;
-  const key = `${STORAGE_PREFIX_NOTIFS}${getNormalizedEmpKey(empId, empName)}`;
+  const primaryKey = `${STORAGE_PREFIX_NOTIFS}${getNormalizedEmpKey(empId, empName)}`;
   try {
     // Retain up to 80 notifications
     const trimmed = notifs.slice(0, 80);
-    localStorage.setItem(key, JSON.stringify(trimmed));
+    localStorage.setItem(primaryKey, JSON.stringify(trimmed));
+
+    // Also synchronize to alternate name key if both id and name exist
+    if (empId && empName) {
+      const altNameKey = `${STORAGE_PREFIX_NOTIFS}${getNormalizedEmpKey(undefined, empName)}`;
+      if (altNameKey !== primaryKey) {
+        localStorage.setItem(altNameKey, JSON.stringify(trimmed));
+      }
+    }
   } catch (e) {
     console.warn('Failed to save universal notifications:', e);
   }
@@ -377,7 +406,8 @@ export async function scanAllModuleAssignments(
       fiveSRaw,
       skillsRaw,
       bpRaw,
-      otRaw
+      otRaw,
+      gembaRaw
     ] = await Promise.all([
       getRange(spreadsheetId, 'Tasks!A:Z').catch(() => []),
       getRange(spreadsheetId, 'ShiftAssignments!A:N').catch(() => []),
@@ -387,7 +417,8 @@ export async function scanAllModuleAssignments(
       getRange(spreadsheetId, 'FiveS_Assessments!A:AG').catch(() => []),
       getRange(spreadsheetId, 'SkillMatrix!A:Z').catch(() => []),
       getRange(spreadsheetId, 'BestPractices!A:Z').catch(() => []),
-      getRange(spreadsheetId, 'Overtime!A:Z').catch(() => [])
+      getRange(spreadsheetId, 'Overtime!A:Z').catch(() => []),
+      getRange(spreadsheetId, 'FiveS_GembaWalk!A:S').catch(() => [])
     ]);
 
     // 1. Scan Tasks
@@ -705,6 +736,68 @@ export async function scanAllModuleAssignments(
         }
       });
       saveKnownModuleRecordIds('5s-management', cleanId, cleanName, known5S);
+    }
+
+    // 6b. Scan Gemba Walk Action Assignments
+    if (gembaRaw && gembaRaw.length > 1) {
+      const knownGemba = getKnownModuleRecordIds('5s-management-gemba', cleanId, cleanName);
+      const isInitialInit = knownGemba.size === 0;
+
+      gembaRaw.slice(1).forEach(row => {
+        const gwId = String(row[0] || '').trim();
+        if (!gwId) return;
+
+        const respName = String(row[10] || '').toLowerCase().trim();
+        const status = String(row[13] || 'Open').trim();
+        if (status === 'Resolved' || status === 'Verified & Closed') {
+          knownGemba.add(gwId);
+          return;
+        }
+
+        const matches = (cleanName && respName.includes(cleanName)) || (cleanName && cleanName.includes(respName));
+        if (matches) {
+          if (!knownGemba.has(gwId)) {
+            knownGemba.add(gwId);
+            if (!isInitialInit) {
+              newAlertCount++;
+              const location = String(row[2] || 'Shop Floor');
+              const severity = (row[7] as any) || 'Medium';
+              const targetDate = String(row[11] || '');
+              const category = String(row[5] || '5S');
+              const observation = String(row[4] || '');
+              const immediateAction = String(row[9] || '');
+
+              notifyUniversalAssignment({
+                id: `asgn-gemba-${gwId}-${Date.now()}`,
+                module: 'gemba-walks',
+                moduleName: 'Gemba Walks',
+                recordId: gwId,
+                title: `Gemba Walk Action: ${location}`,
+                subtitle: `${severity} Priority • Due ${targetDate} • ${category}`,
+                details: `Assigned Action for: "${observation}". Immediate Action: "${immediateAction}".`,
+                priority: severity === 'Critical' ? 'Critical' : severity === 'High' ? 'High' : severity === 'Medium' ? 'Medium' : 'Low',
+                status: status as any,
+                date: targetDate,
+                assignedById: 'Auditor',
+                assignedByName: 'Gemba Walk Committee',
+                assigneeId: cleanId,
+                assigneeName: currentEmployeeName,
+                assignedAt: new Date().toISOString(),
+                read: false,
+                acknowledged: false,
+                metadata: {
+                  locationAsset: location,
+                  category,
+                  severity,
+                  observationFinding: observation,
+                  immediateAction
+                }
+              });
+            }
+          }
+        }
+      });
+      saveKnownModuleRecordIds('5s-management-gemba', cleanId, cleanName, knownGemba);
     }
 
     // 7. Scan Skill Matrix

@@ -5,10 +5,11 @@ import {
   Award, DownloadCloud, Settings, Menu, X, LogOut,
   ChevronDown, User as UserIcon, ChevronRight, Mountain, Eye, BarChart, Download, CheckSquare, Target,
   Shield, Mail, Building, Briefcase, KeyRound, FileCheck2, AlertTriangle, Compass, Sparkles, Search, PartyPopper,
-  Palette, UserCheck, Activity, Layers, Bell, ExternalLink
+  Palette, UserCheck, Activity, Layers, Bell, ExternalLink, TrendingUp
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import EmployeeDirectory from './EmployeeDirectory';
+import PromotionsCareer from './promotions/PromotionsCareer';
 import MachineCapacity from './MachineCapacity';
 import LeaveManagement from './LeaveManagement';
 import OvertimeCalendar from './OvertimeCalendar';
@@ -19,6 +20,7 @@ import ShiftAssignments from './ShiftAssignments';
 import Dashboard from './Dashboard';
 import SkillMatrixDashboard from './SkillMatrixDashboard';
 import Tasks from './Tasks';
+import GembaWalks from './GembaWalks';
 import KPIPerformance from './kpi/KPIPerformance';
 import BreakdownLog from './BreakdownLog';
 import FiveSManagement from './FiveSManagement';
@@ -73,7 +75,7 @@ interface LayoutProps {
   userSecurityScope?: UserSecurityScope;
 }
 
-type ModuleType = 'dashboard' | 'tasks' | '5s-management' | 'directory' | 'kpi' | 'machine' | 'breakdown' | 'skill' | 'leave' | 'overtime' | 'practices' | 'shifts' | 'orgchart' | 'reports' | 'settings' | 'anniversaries' | 'reviews' | 'contact-portfolio';
+type ModuleType = 'dashboard' | 'tasks' | 'gemba-walks' | '5s-management' | 'directory' | 'promotions' | 'kpi' | 'machine' | 'breakdown' | 'skill' | 'leave' | 'overtime' | 'practices' | 'shifts' | 'orgchart' | 'reports' | 'settings' | 'anniversaries' | 'reviews' | 'contact-portfolio';
 
 export default function Layout({ user, spreadsheetId, onLogout, accessLevels, userSecurityScope }: LayoutProps) {
   const [activeModule, setActiveModule] = useState<ModuleType | 'skill-dashboard'>('dashboard');
@@ -369,9 +371,11 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
   const navigation = [
     { id: 'dashboard', name: 'ERP Dashboard', icon: Menu, moduleName: 'All' },
     { id: 'tasks', name: 'Daily Tasks', icon: CheckSquare, moduleName: 'All' },
+    { id: 'gemba-walks', name: 'Gemba Walks', icon: Eye, moduleName: 'All' },
     { id: '5s-management', name: '5S & Visual Mgmt', icon: Sparkles, moduleName: '5S & Visual Management' },
     { id: 'breakdown', name: 'Breakdown Log', icon: AlertTriangle, moduleName: 'Machine & Skills' },
     { id: 'directory', name: 'Employee Directory', icon: Users, moduleName: 'Employee Directory' },
+    { id: 'promotions', name: 'Promotions & Career', icon: TrendingUp, moduleName: 'Employee Directory' },
     { id: 'anniversaries', name: 'Birthdays & Anniversaries', icon: PartyPopper, moduleName: 'All' },
     { id: 'leave', name: 'Leave', icon: Calendar, moduleName: 'Leave Management' },
     { id: 'overtime', name: 'Overtime', icon: Clock, moduleName: 'Overtime' },
@@ -414,8 +418,10 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
       case 'skill-dashboard': return <SkillMatrixDashboard spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} />;
       case 'dashboard': return <Dashboard spreadsheetId={spreadsheetId} user={user} accessLevels={accessLevels} userSecurityScope={userSecurityScope} onNavigate={(tab) => setActiveModule(tab as any)} />;
       case 'tasks': return <Tasks spreadsheetId={spreadsheetId} user={user} userSecurityScope={userSecurityScope} />;
-      case '5s-management': return <FiveSManagement spreadsheetId={spreadsheetId} user={user} userSecurityScope={userSecurityScope} />;
-      case 'directory': return <EmployeeDirectory spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} />;
+      case 'gemba-walks': return <GembaWalks spreadsheetId={spreadsheetId} user={user} userSecurityScope={userSecurityScope} />;
+      case '5s-management': return <FiveSManagement spreadsheetId={spreadsheetId} user={user} userSecurityScope={userSecurityScope} onNavigate={(tab) => setActiveModule(tab as any)} />;
+      case 'directory': return <EmployeeDirectory spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} adminDisplayName={user?.displayName || user?.email || userSecurityScope?.username} />;
+      case 'promotions': return <PromotionsCareer spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} adminDisplayName={user?.displayName || user?.email || userSecurityScope?.username} onNavigate={(tab, extra) => handleCommandNavigate(tab, extra)} />;
       case 'anniversaries': return <WorkAnniversaries spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} onNavigate={(tab, extra) => handleCommandNavigate(tab, extra)} />;
       case 'kpi': return <KPIPerformance spreadsheetId={spreadsheetId} employees={employees} accessLevels={accessLevels} userEmail={user.email || ''} userSecurityScope={userSecurityScope} user={user} />;
       case 'reviews': return <KPIPerformance spreadsheetId={spreadsheetId} employees={employees} accessLevels={accessLevels} userEmail={user.email || ''} userSecurityScope={userSecurityScope} user={user} initialParameter="performance-reviews" />;

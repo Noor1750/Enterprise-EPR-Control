@@ -41,6 +41,7 @@ export default function EnterpriseLogin({
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
   const [resetErrorMessage, setResetErrorMessage] = useState<string | null>(null);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
 
   // Track Caps Lock key state
   const handleKeyActivity = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -171,7 +172,7 @@ export default function EnterpriseLogin({
                     disabled={isLoading}
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="e.g. noor.alam1750@gmail.com or EMP001"
+                    placeholder="Enter email or Employee ID"
                     className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition disabled:opacity-60"
                   />
                 </div>
@@ -269,8 +270,16 @@ export default function EnterpriseLogin({
             {/* Google Authentication Button */}
             <button
               type="button"
-              disabled={isLoading}
-              onClick={onGoogleLogin}
+              disabled={isLoading || isGoogleSubmitting}
+              onClick={async () => {
+                if (isLoading || isGoogleSubmitting) return;
+                setIsGoogleSubmitting(true);
+                try {
+                  await onGoogleLogin();
+                } finally {
+                  setIsGoogleSubmitting(false);
+                }
+              }}
               className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs sm:text-sm font-bold shadow-xs hover:border-slate-300 transition active:scale-[0.99] disabled:opacity-50"
             >
               <img
@@ -278,7 +287,7 @@ export default function EnterpriseLogin({
                 alt="Google logo"
                 className="w-4 h-4"
               />
-              <span>Continue with Google</span>
+              <span>{isGoogleSubmitting ? 'Connecting...' : 'Continue with Google'}</span>
             </button>
 
           </div>
@@ -368,7 +377,7 @@ export default function EnterpriseLogin({
                       required
                       value={forgotIdentifier}
                       onChange={(e) => setForgotIdentifier(e.target.value)}
-                      placeholder="e.g. noor.alam1750@gmail.com or EMP001"
+                      placeholder="Enter registered email or Employee ID"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     />
                   </div>

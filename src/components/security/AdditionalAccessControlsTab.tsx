@@ -6,7 +6,7 @@ import {
   Info, ExternalLink, Filter, SlidersHorizontal, ChevronRight, Eye, Edit3
 } from 'lucide-react';
 import { UserSecurityScope } from '../../lib/security';
-import { getSystemNavigators, SystemNavigator } from '../../lib/navigators';
+import { getSystemNavigators, SystemNavigator, getNavigatorIcon } from '../../lib/navigators';
 import { 
   getUserAdditionalAccessFromStorage, 
   buildUserAdditionalAccessMatrix,
@@ -648,9 +648,14 @@ export default function AdditionalAccessControlsTab({
                       {/* Navigator & Category */}
                       <td className="px-5 py-3.5">
                         <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 shrink-0 mt-0.5">
-                            <Compass className="w-4 h-4 text-indigo-600" />
-                          </div>
+                          {(() => {
+                            const NavIcon = getNavigatorIcon(item.iconName || 'Compass');
+                            return (
+                              <div className="p-2 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 shrink-0 mt-0.5">
+                                <NavIcon className="w-4 h-4 text-indigo-600" />
+                              </div>
+                            );
+                          })()}
                           <div>
                             <span className="font-bold text-slate-900 text-sm block leading-tight">
                               {item.navigatorName}

@@ -48,6 +48,7 @@ export default function FiveSAssessmentModal({
   const [assessmentMonth, setAssessmentMonth] = useState<string>(currentMonthStr);
   const [frequency, setFrequency] = useState<AssessmentFrequency>('Monthly');
   const [remarks, setRemarks] = useState<string>('');
+  const [areaLeaderName, setAreaLeaderName] = useState<string>('');
   const [activeCategoryTab, setActiveCategoryTab] = useState<FiveSCategoryKey>('sort');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -79,6 +80,7 @@ export default function FiveSAssessmentModal({
       setAssessmentMonth(initialAssessment.month || initialAssessment.period || currentMonthStr);
       setFrequency(initialAssessment.frequency || 'Monthly');
       setRemarks(initialAssessment.remarks || '');
+      setAreaLeaderName(initialAssessment.areaLeaderName || initialAssessment.lineLeaderName || '');
 
       const respMap: Record<string, ChecklistResponse> = {};
       if (initialAssessment.checklistResponses && initialAssessment.checklistResponses.length > 0) {
@@ -108,6 +110,15 @@ export default function FiveSAssessmentModal({
       setAssessmentMonth(currentMonthStr);
       setFrequency('Monthly');
       setRemarks('');
+
+      const targetEmp = employees.find(e => e.id === (selectedEmpId || employees[0]?.id));
+      const matched = settings.areaLineLeaders?.find(l => 
+        targetEmp && (
+          targetEmp.department?.toLowerCase().includes(l.areaName.toLowerCase()) ||
+          ((targetEmp as any).workingArea && String((targetEmp as any).workingArea).toLowerCase().includes(l.areaName.toLowerCase()))
+        )
+      );
+      setAreaLeaderName(matched?.lineLeaderName || (targetEmp as any)?.supervisor || 'Mamunur Rashid');
 
       const defaultResponses: Record<string, ChecklistResponse> = {};
       settings.checklistCriteria.forEach(c => {
@@ -294,6 +305,8 @@ export default function FiveSAssessmentModal({
         supervisorName: (selectedEmployee as any).supervisor || 'Sarah Connor',
         managerName: (selectedEmployee as any).manager || 'Michael Scott',
         shift: (selectedEmployee as any).shift || 'Day Shift',
+        areaLeaderName: areaLeaderName.trim() || (selectedEmployee as any).supervisor || 'Mamunur Rashid',
+        lineLeaderName: areaLeaderName.trim() || (selectedEmployee as any).supervisor || 'Mamunur Rashid',
         assessorId: currentUserId,
         assessorName: currentUserName,
         assessorEmail: currentUserEmail,
@@ -415,7 +428,7 @@ export default function FiveSAssessmentModal({
               1. Employee & Audit Parameters (Linked to Employee Master)
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Target Employee *
@@ -477,11 +490,37 @@ export default function FiveSAssessmentModal({
                   <option value="Special">Special / Surprise Audit</option>
                 </select>
               </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>5S Area / Line Leader *</span>
+                  <span className="text-[10px] text-blue-600 font-bold">5S Leader</span>
+                </label>
+                <input
+                  type="text"
+                  list="area-line-leaders-list"
+                  value={areaLeaderName}
+                  onChange={(e) => setAreaLeaderName(e.target.value)}
+                  placeholder="e.g. Rakib & Jewel"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  required
+                />
+                <datalist id="area-line-leaders-list">
+                  {(settings.areaLineLeaders || []).map(lead => (
+                    <option key={lead.id} value={lead.lineLeaderName}>
+                      {lead.areaName}: {lead.lineLeaderName}
+                    </option>
+                  ))}
+                  {employees.map(e => (
+                    <option key={e.id} value={e.name}>{e.name} ({e.department})</option>
+                  ))}
+                </datalist>
+              </div>
             </div>
 
             {/* Resolved Employee Master Card */}
             {selectedEmployee && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 pt-3 border-t border-slate-200/80 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 pt-3 border-t border-slate-200/80 text-xs">
                 <div>
                   <span className="text-[10px] text-slate-400 font-semibold block uppercase">Department</span>
                   <span className="font-bold text-slate-800">{selectedEmployee.department || 'Cutting'}</span>
@@ -501,6 +540,10 @@ export default function FiveSAssessmentModal({
                 <div>
                   <span className="text-[10px] text-slate-400 font-semibold block uppercase">Supervisor</span>
                   <span className="font-bold text-slate-800">{(selectedEmployee as any).supervisor || 'Sarah Connor'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block uppercase">5S Line Leader</span>
+                  <span className="font-bold text-blue-700">{areaLeaderName || 'Assigned on Floor'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-semibold block uppercase">Manager</span>

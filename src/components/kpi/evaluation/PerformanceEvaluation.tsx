@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { 
   Employee, PerformanceEvaluationRecord, EvaluationScores, 
-  calculateEvaluationSummary, calculateYearOfService 
+  calculateEvaluationSummary, calculateYearOfService, resolveEvaluatorDisplayName 
 } from '../types';
 import { filterAuthorizedEmployees, getAuthorizedEmployeeIdSet } from '../../../lib/security';
 import EvaluationForm from './EvaluationForm';
@@ -294,7 +294,7 @@ export default function PerformanceEvaluation({
                 periodKey: String(row[9] || ''),
                 year: Number(row[10]) || 2026,
                 evaluationDate: String(row[11] || ''),
-                evaluatedBy: String(row[12] || ''),
+                evaluatedBy: resolveEvaluatorDisplayName(String(row[12] || ''), employees),
                 scores,
                 totalScore,
                 totalPossible: 50,

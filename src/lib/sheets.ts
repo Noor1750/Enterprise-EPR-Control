@@ -373,6 +373,52 @@ const DEFAULT_LOCAL_DB: Record<string, string[][]> = {
       'Admin', 'Assessment Approved', 'Assessment', '5S-2026-08-001', 'Approved 5S assessment for EMP001 (John Doe) with score 95% (Excellent).'
     ]
   ],
+  FiveS_GembaWalk: [
+    [
+      'Walk_ID', 'Date', 'Location_Asset', 'Picture_Before', 'Observation_Finding', 
+      'Category', 'Risk_Impact', 'Severity', 'Root_Cause_5Why', 'Immediate_Action', 
+      'Responsible', 'Target_Date', 'Picture_After', 'Status', 'Closure_Date', 
+      'Closed_By', 'Five_Why_JSON', 'Created_At', 'Updated_At'
+    ],
+    [
+      'GW-2026-001', '2026-09-01', 'Sewing Floor A - Line 4 Station 12',
+      'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=500&auto=format&fit=crop&q=60',
+      'Foot pedal electrical cables tangled around operator stool leg and protruding 40cm into the transit aisle.',
+      'Safety & Hazard', 'High trip & fall hazard for line operators and material runners; repetitive friction risks cable insulation breach.',
+      'High', 'Workstation reconfigured without relocating ceiling drop cord; absence of 5S pre-startup change verification.',
+      'Temporarily wrapped cord with spiral protection sleeve and taped down heavy-duty yellow hazard cable bridge.',
+      'David Wilson', '2026-09-08',
+      'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&auto=format&fit=crop&q=60',
+      'In Progress', '', '',
+      '{"why1":"Why is power cord trailing? Socket is 2.5m away.","why2":"Why 2.5m away? Station moved last Friday.","why3":"Why not moved drop cord? No work order submitted.","why4":"Why no work order? No pre-startup electrical clearance requirement.","why5":"Why no requirement? Lack of MOC standard for line shifts.","rootCauseSummary":"No standardized 5S pre-operational sign-off checklist when reconfiguring sewing line stations.","systemicCountermeasure":"Mandate 5S pre-startup checklist with electrical cable raceway verification for all line adjustments."}',
+      '2026-09-01T09:30:00.000Z', '2026-09-02T14:15:00.000Z'
+    ],
+    [
+      'GW-2026-002', '2026-09-02', 'Finishing Bay 2 - Steam Ironing Zone #3',
+      'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=500&auto=format&fit=crop&q=60',
+      'Water and condensation puddle accumulating under steam manifold onto smooth ceramic tile walkway.',
+      'Shine (3S)', 'Severe slip hazard; continuous thermal steam dissipation wasting energy; possible floor tile erosion.',
+      'Critical', 'Gasket on secondary condensate valve degraded due to missing preventive visual inspection tag schedule.',
+      'Placed portable wet floor warning cone, wiped dry, and isolated steam shutoff valve #3 during lunch break.',
+      'Alex Johnson', '2026-09-04',
+      'https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=500&auto=format&fit=crop&q=60',
+      'Resolved', '2026-09-03', 'Alex Johnson',
+      '{"why1":"Why is water pooling? Condensate drainage pipe joint weeping.","why2":"Why weeping? Teflon sealing washer is hardened.","why3":"Why not replaced? Exceeded 6-month lifespan by 45 days.","why4":"Why missed? Valve lacked visual PM date tag.","why5":"Why no tag? Secondary steam distribution lines omitted from visual standards.","rootCauseSummary":"Secondary steam manifold joints lacked visual 5S color-coded PM inspection stickers.","systemicCountermeasure":"Install stainless condensate drip pan, replace gasket, and apply quarterly visual PM color tags."}',
+      '2026-09-02T10:15:00.000Z', '2026-09-03T11:00:00.000Z'
+    ],
+    [
+      'GW-2026-003', '2026-09-02', 'Cutting Table #1 - Tool Shadow Board',
+      'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?w=500&auto=format&fit=crop&q=60',
+      'Rotary fabric cutter shears and acrylic edge rulers missing from designated shadow board; scattered on unfinished garment stack.',
+      'Set in Order (2S)', 'Exposed rotary blade risks fabric cutting damage; search time delay of 6-8 mins per shift; operator finger cut risk.',
+      'Medium', 'Shadow silhouettes on board peeled off; no operator color-coded accountability tag system for checkout.',
+      'Collected tools, safely housed rotary cutter in protective sheath, and wiped down board.',
+      'Jane Smith', '2026-09-07', '',
+      'Open', '', '',
+      '{"why1":"Why are shears on fabric? Operator finished cut and did not return tool.","why2":"Why not returned? The hook had another pair of scissors placed on it.","why3":"Why different scissors? Tool silhouette vinyl had peeled off during cleaning.","why4":"Why not renewed? Standard tape used instead of industrial laminated vinyl.","why5":"Why standard tape? 5S visual tool shadow standard lacked material specification.","rootCauseSummary":"Shadow board markings used non-durable vinyl tape that degraded under solvent cleaning.","systemicCountermeasure":"Laser-cut rigid PVC shadow inserts and implement 1-for-1 tool token accountability ring."}',
+      '2026-09-02T14:45:00.000Z', '2026-09-02T14:45:00.000Z'
+    ]
+  ],
   UserAdditionalAccess: [
     [
       'User_ID', 'Employee_ID', 'User_Name', 'Navigator_ID', 'Navigator_Name', 
@@ -1026,14 +1072,22 @@ export async function deleteRowByPrimaryKey(spreadsheetId: string, sheetName: st
   });
 }
 
+const verifiedSheets = new Set<string>();
+
 export async function ensureSheetExists(spreadsheetId: string, sheetName: string, headers: string[]): Promise<void> {
+  const cacheKey = `${spreadsheetId}-${sheetName}`;
+  if (verifiedSheets.has(cacheKey)) return;
+
   const localData = getLocalSheet(sheetName);
   if (localData.length === 0) {
     setLocalSheet(sheetName, [headers]);
   }
 
   const token = await getAccessToken();
-  if (isLocalStorageDb(spreadsheetId, token)) return;
+  if (isLocalStorageDb(spreadsheetId, token)) {
+    verifiedSheets.add(cacheKey);
+    return;
+  }
 
   try {
     const getResponse = await fetch(`${BASE_URL}/${spreadsheetId}`, {
@@ -1067,6 +1121,7 @@ export async function ensureSheetExists(spreadsheetId: string, sheetName: string
         await appendRow(spreadsheetId, `${sheetName}!A1`, [headers]);
       }
     }
+    verifiedSheets.add(cacheKey);
   } catch (err) {
     console.warn(`ensureSheetExists (${sheetName}) remote check skipped:`, err);
   }

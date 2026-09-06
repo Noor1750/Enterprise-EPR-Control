@@ -7,6 +7,7 @@ import {
 import { getRange, updateRange, createSpreadsheet } from '../../lib/sheets';
 import { SUPER_ADMIN_EMAILS } from '../../lib/security';
 import { verifyAdminDeletePassword } from '../../lib/appSettings';
+import DriveStorageAndCleanup from './DriveStorageAndCleanup';
 
 interface GoogleDriveSettingsProps {
   spreadsheetId: string;
@@ -492,6 +493,9 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
           </div>
         </div>
       </div>
+
+      {/* GOOGLE DRIVE STORAGE VISIBILITY & HISTORICAL DATA CLEANUP */}
+      <DriveStorageAndCleanup spreadsheetId={spreadsheetId} user={user} />
 
       {/* BACKUP & RESTORE SECTION */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
