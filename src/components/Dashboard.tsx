@@ -3,7 +3,8 @@ import {
   Loader2, Sparkles, Gift, ShieldCheck, UserCheck, 
   Calendar as CalendarIcon, RefreshCw, Layers, Users, Wrench, CheckSquare, Target, Activity, Clock
 } from 'lucide-react';
-import { getRange } from '../lib/sheets';
+import { getRange, batchGetRanges } from '../lib/sheets';
+import { batchGetCachedRanges, CACHE_TTLS } from '../lib/dataCache';
 import { 
   format, parseISO, isValid, isToday, isBefore, isWithinInterval, 
   startOfMonth, endOfMonth, eachDayOfInterval 
@@ -14,6 +15,14 @@ import {
   Task, parseTaskRow, filterAuthorizedTasks, getCalculatedTaskStatus, isUserManagerOrAdmin 
 } from '../lib/taskEngine';
 import { KPIRecord, parsePercentage } from './kpi/types';
+
+// Progressive Skeletons for Smart Zero-Lag Loading
+import { 
+  KPICardsSkeleton, 
+  ExecutiveRibbonSkeleton, 
+  ChartSkeleton, 
+  PrioritiesSkeleton 
+} from './common/SkeletonLoader';
 
 // Subcomponents
 import DashboardHeader from './dashboard/DashboardHeader';
@@ -92,55 +101,81 @@ export default function Dashboard({
     return calculateDateRange(dateFilter, customStartDate, customEndDate);
   }, [dateFilter, customStartDate, customEndDate]);
 
-  // Load all ERP datasets from database
-  const loadData = async (silent: boolean = false) => {
+  // Load all ERP datasets from database with smart caching & SWR
+  const loadData = async (silent: boolean = false, forceRefresh: boolean = false) => {
     if (!spreadsheetId) return;
-    if (!silent) setIsLoading(true);
-    else setIsRefreshing(true);
+    if (!silent) {
+      // If we already have some cached data, don't show full loading screen
+      if (employees.length === 0 && machines.length === 0) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+    } else {
+      setIsRefreshing(true);
+    }
 
     try {
-      const [
-        mRaw, eRaw, lRaw, sRaw, bRaw, hRaw, tRaw, kRaw, salRaw
-      ] = await Promise.all([
-        getRange(spreadsheetId, 'MachineCapacity').catch(() => []),
-        getRange(spreadsheetId, 'Employees').catch(() => []),
-        getRange(spreadsheetId, 'Leave').catch(() => []),
-        getRange(spreadsheetId, 'Supervisors').catch(() => []),
-        getRange(spreadsheetId, 'BreakdownLog').catch(() => []),
-        getRange(spreadsheetId, 'ShiftHistory').catch(() => []),
-        getRange(spreadsheetId, 'Tasks!A:Z').catch(() => []),
-        getRange(spreadsheetId, 'KPI').catch(() => []),
-        getRange(spreadsheetId, 'SettlementAuditLog').catch(() => [])
-      ]);
+      // Use efficient batchGetCachedRanges to query all dashboard datasets with SWR cache
+      const dashboardSheets = [
+        'MachineCapacity!A:Z',
+        'Employees!A:Z',
+        'Leave!A:Z',
+        'Supervisors!A:Z',
+        'BreakdownLog!A:Z',
+        'ShiftHistory!A:Z',
+        'Tasks!A:Z',
+        'KPI!A:Z',
+        'SettlementAuditLog!A:Z'
+      ];
 
-      setMachines(mRaw.length > 1 ? mRaw.slice(1) : []);
-      setEmployees(eRaw.length > 1 ? eRaw.slice(1) : []);
-      setLeaves(lRaw.length > 1 ? lRaw.slice(1) : []);
-      setSupervisors(sRaw.length > 1 ? sRaw.slice(1) : []);
-      setBreakdowns(bRaw.length > 1 ? bRaw.slice(1) : []);
-      setShiftHistory(hRaw.length > 1 ? hRaw.slice(1) : []);
+      const batchResults = await batchGetCachedRanges(spreadsheetId, dashboardSheets, { 
+        bypassCache: forceRefresh, 
+        ttl: CACHE_TTLS.KPI 
+      });
+
+      const mRaw = batchResults['MachineCapacity!A:Z'] || [];
+      const eRaw = batchResults['Employees!A:Z'] || [];
+      const lRaw = batchResults['Leave!A:Z'] || [];
+      const sRaw = batchResults['Supervisors!A:Z'] || [];
+      const bRaw = batchResults['BreakdownLog!A:Z'] || [];
+      const hRaw = batchResults['ShiftHistory!A:Z'] || [];
+      const tRaw = batchResults['Tasks!A:Z'] || [];
+      const kRaw = batchResults['KPI!A:Z'] || [];
+      const salRaw = batchResults['SettlementAuditLog!A:Z'] || [];
+
+      if (mRaw.length > 0) setMachines(mRaw.length > 1 ? mRaw.slice(1) : []);
+      if (eRaw.length > 0) setEmployees(eRaw.length > 1 ? eRaw.slice(1) : []);
+      if (lRaw.length > 0) setLeaves(lRaw.length > 1 ? lRaw.slice(1) : []);
+      if (sRaw.length > 0) setSupervisors(sRaw.length > 1 ? sRaw.slice(1) : []);
+      if (bRaw.length > 0) setBreakdowns(bRaw.length > 1 ? bRaw.slice(1) : []);
+      if (hRaw.length > 0) setShiftHistory(hRaw.length > 1 ? hRaw.slice(1) : []);
       
-      const parsedTasks = tRaw.length > 1 ? tRaw.slice(1).filter(r => !!r[0]).map(parseTaskRow) : [];
-      setRawTasks(parsedTasks);
+      if (tRaw.length > 0) {
+        const parsedTasks = tRaw.length > 1 ? tRaw.slice(1).filter(r => !!r[0]).map(parseTaskRow) : [];
+        setRawTasks(parsedTasks);
+      }
 
-      const parsedKpis: KPIRecord[] = kRaw.length > 1 
-        ? kRaw.slice(1).filter(r => !!r[0]).map(r => ({
-            kpiId: r[0] || '',
-            employeeId: r[1] || '',
-            employeeName: r[2] || '',
-            department: r[3] || '',
-            month: r[4] || '',
-            date: r[5] || '',
-            plan: parsePercentage(r[6]),
-            achievement: parsePercentage(r[7]),
-            rating: calculatePerformanceRating(parsePercentage(r[7])),
-            createdAt: r[9] || '',
-            updatedAt: r[10] || ''
-          }))
-        : [];
-      setRawKpis(parsedKpis);
+      if (kRaw.length > 0) {
+        const parsedKpis: KPIRecord[] = kRaw.length > 1 
+          ? kRaw.slice(1).filter(r => !!r[0]).map(r => ({
+              kpiId: r[0] || '',
+              employeeId: r[1] || '',
+              employeeName: r[2] || '',
+              department: r[3] || '',
+              month: r[4] || '',
+              date: r[5] || '',
+              plan: parsePercentage(r[6]),
+              achievement: parsePercentage(r[7]),
+              rating: calculatePerformanceRating(parsePercentage(r[7])),
+              createdAt: r[9] || '',
+              updatedAt: r[10] || ''
+            }))
+          : [];
+        setRawKpis(parsedKpis);
+      }
 
-      setAuditLogs(salRaw.length > 1 ? salRaw.slice(1) : []);
+      if (salRaw.length > 0) setAuditLogs(salRaw.length > 1 ? salRaw.slice(1) : []);
       setLastUpdated(new Date());
     } catch (err: any) {
       if (!err?.message?.includes('Database (Spreadsheet) not found')) {
@@ -926,12 +961,21 @@ export default function Dashboard({
 
   if (isLoading) {
     return (
-      <div className="p-8 max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[500px]">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#2A3F54] to-[#1ABB9C] flex items-center justify-center shadow-lg mb-4 animate-pulse">
-          <Loader2 className="w-8 h-8 text-white animate-spin" />
+      <div className="p-4 md:p-8 w-full max-w-full mx-auto space-y-6">
+        <ExecutiveRibbonSkeleton />
+        <KPICardsSkeleton count={4} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <ChartSkeleton height="h-72" />
+            <ChartSkeleton height="h-64" />
+          </div>
+          <div className="space-y-6">
+            <div className="bg-white/70 dark:bg-slate-800/70 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+              <div className="h-4 w-36 bg-slate-200 dark:bg-slate-700 rounded mb-4 animate-pulse" />
+              <PrioritiesSkeleton count={4} />
+            </div>
+          </div>
         </div>
-        <h3 className="text-base font-bold text-gray-800">Initializing ERP Executive Dashboard...</h3>
-        <p className="text-xs text-gray-500 mt-1">Aggregating live cross-navigator operational datasets</p>
       </div>
     );
   }

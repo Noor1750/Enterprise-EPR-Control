@@ -985,7 +985,7 @@ export default function EmployeeProfileModal({
                   </div>
                 </div>
 
-                {onPromote && (
+                {onPromote ? (
                   <button
                     onClick={() => {
                       onClose();
@@ -995,7 +995,18 @@ export default function EmployeeProfileModal({
                   >
                     <Plus className="w-4 h-4" /> Promote This Employee
                   </button>
-                )}
+                ) : onNavigate ? (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onNavigate('promotions', { employeeId: employee.id, search: employee.name });
+                    }}
+                    className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    <span>Promotions & Career</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                ) : null}
               </div>
 
               {/* Promotions Timeline */}

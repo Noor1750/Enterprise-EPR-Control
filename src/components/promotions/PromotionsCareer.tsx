@@ -14,6 +14,8 @@ import {
 import { Employee } from '../kpi/types';
 import { EmployeeShiftState } from '../../lib/shiftEngine';
 import { getRange } from '../../lib/sheets';
+import { getCachedEmployees, fetchWithSWR, CACHE_TTLS } from '../../lib/dataCache';
+import SkeletonLoader, { KPICardsSkeleton } from '../common/SkeletonLoader';
 import { UserSecurityScope, canUserPerformAction } from '../../lib/security';
 import EmployeePromotionModal from '../employee/EmployeePromotionModal';
 import PromotionLetterModal from '../employee/PromotionLetterModal';
@@ -80,53 +82,28 @@ export default function PromotionsCareer({
     }, 4000);
   };
 
-  // Load Data
+  // Load Data with SWR intelligent caching
   const loadData = async (showLoading = false) => {
     if (showLoading) setIsLoading(true);
     else setIsRefreshing(true);
 
     try {
-      // 1. Fetch Promotions
-      const promRes = await fetchEmployeePromotions(spreadsheetId);
+      // 1. Fetch Promotions with SWR
+      const promRes = await fetchWithSWR<EmployeePromotionRecord[]>(
+        `${spreadsheetId}_promotions_registry`,
+        async () => {
+          const res = await fetchEmployeePromotions(spreadsheetId);
+          return Array.isArray(res) ? res : [];
+        },
+        CACHE_TTLS.SETTINGS,
+        (freshProms) => setPromotions(freshProms)
+      );
       setPromotions(Array.isArray(promRes) ? promRes : []);
 
-      // 2. Fetch Employees Directory
-      let empList: Employee[] = [];
-      try {
-        const cached = localStorage.getItem('erp_employees_cache');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            empList = parsed;
-          }
-        }
-      } catch {
-        // ignore
-      }
-
-      if (empList.length === 0 && spreadsheetId && spreadsheetId !== 'local-storage-db') {
-        try {
-          const raw = await getRange(spreadsheetId, 'Employees!A2:Z');
-          if (raw && raw.length > 0) {
-            empList = raw.map(r => ({
-              id: String(r[0] || '').trim(),
-              name: String(r[1] || '').trim(),
-              designation: String(r[2] || '').trim(),
-              department: String(r[3] || '').trim(),
-              dateOfJoin: String(r[4] || '').trim(),
-              category: (r[5] || 'Non-Management') as any,
-              email: String(r[8] || '').trim(),
-              status: (r[9] || 'Active') as any,
-              phone: String(r[11] || '').trim(),
-              profilePicture: String(r[16] || '').trim(),
-              dateOfBirth: String(r[21] || '').trim()
-            })).filter(e => e.id && e.name);
-          }
-        } catch (e) {
-          console.warn('Could not load Employees sheet:', e);
-        }
-      }
-
+      // 2. Fetch Employees from high-performance cache
+      const empList = await getCachedEmployees(spreadsheetId, false, (freshEmps) => {
+        setEmployees(freshEmps);
+      });
       setEmployees(empList);
     } catch (err) {
       console.error('Failed to load promotions & career data:', err);
@@ -158,10 +135,28 @@ export default function PromotionsCareer({
     };
     window.addEventListener('erp-command-action', handleCommandAction);
 
+    // Listen for module context navigation from Directory or Employee Profile
+    const handleModuleContext = (e: any) => {
+      if (e.detail?.moduleId === 'promotions') {
+        if (e.detail.search) {
+          setSearchTerm(e.detail.search);
+        }
+        if (e.detail.employeeId) {
+          setSearchTerm(e.detail.employeeId);
+        }
+        if (e.detail.action === 'record-promotion') {
+          setEditingPromotionRecord(null);
+          setIsPromotionModalOpen(true);
+        }
+      }
+    };
+    window.addEventListener('erp-module-context', handleModuleContext);
+
     return () => {
       window.removeEventListener('erp-promotions-updated', handleUpdate);
       window.removeEventListener('erp-db-updated', handleUpdate);
       window.removeEventListener('erp-command-action', handleCommandAction);
+      window.removeEventListener('erp-module-context', handleModuleContext);
     };
   }, [spreadsheetId]);
 
@@ -527,72 +522,76 @@ export default function PromotionsCareer({
       </div>
 
       {/* KPI Metrics Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-2xs font-bold uppercase tracking-wider">Total Promotions</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Award className="w-4 h-4" />
+      {isLoading ? (
+        <KPICardsSkeleton count={5} />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-500 mb-2">
+              <span className="text-2xs font-bold uppercase tracking-wider">Total Promotions</span>
+              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Award className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-900">{metrics.totalPromotions}</div>
+              <p className="text-3xs text-slate-400 font-medium mt-0.5">All-time corporate records</p>
             </div>
           </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">{metrics.totalPromotions}</div>
-            <p className="text-3xs text-slate-400 font-medium mt-0.5">All-time corporate records</p>
-          </div>
-        </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-2xs font-bold uppercase tracking-wider">Promoted in {currentYear}</span>
-            <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-              <Calendar className="w-4 h-4" />
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-500 mb-2">
+              <span className="text-2xs font-bold uppercase tracking-wider">Promoted in {currentYear}</span>
+              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                <Calendar className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-rose-600">{metrics.thisYearCount}</div>
+              <p className="text-3xs text-slate-400 font-medium mt-0.5">Active year advancements</p>
             </div>
           </div>
-          <div>
-            <div className="text-2xl font-black text-rose-600">{metrics.thisYearCount}</div>
-            <p className="text-3xs text-slate-400 font-medium mt-0.5">Active year advancements</p>
-          </div>
-        </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-2xs font-bold uppercase tracking-wider">Unique Staff Advanced</span>
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <User className="w-4 h-4" />
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-500 mb-2">
+              <span className="text-2xs font-bold uppercase tracking-wider">Unique Staff Advanced</span>
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <User className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-900">{metrics.uniqueEmployees}</div>
+              <p className="text-3xs text-slate-400 font-medium mt-0.5">Individual talent recognized</p>
             </div>
           </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">{metrics.uniqueEmployees}</div>
-            <p className="text-3xs text-slate-400 font-medium mt-0.5">Individual talent recognized</p>
-          </div>
-        </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-2xs font-bold uppercase tracking-wider">Avg Salary Increment</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-500 mb-2">
+              <span className="text-2xs font-bold uppercase tracking-wider">Avg Salary Increment</span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-emerald-600">+{metrics.avgIncrementPct}%</div>
+              <p className="text-3xs text-slate-400 font-medium mt-0.5">Avg +৳{metrics.avgIncrementAmt} / mo</p>
             </div>
           </div>
-          <div>
-            <div className="text-2xl font-black text-emerald-600">+{metrics.avgIncrementPct}%</div>
-            <p className="text-3xs text-slate-400 font-medium mt-0.5">Avg +৳{metrics.avgIncrementAmt} / mo</p>
-          </div>
-        </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-2xs font-bold uppercase tracking-wider">Appraisal Candidates</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1">
+            <div className="flex items-center justify-between text-slate-500 mb-2">
+              <span className="text-2xs font-bold uppercase tracking-wider">Appraisal Candidates</span>
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <Clock className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-900">{metrics.eligibleCount}</div>
+              <p className="text-3xs text-slate-400 font-medium mt-0.5">&gt;1 yr tenure eligible for review</p>
             </div>
           </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">{metrics.eligibleCount}</div>
-            <p className="text-3xs text-slate-400 font-medium mt-0.5">&gt;1 yr tenure eligible for review</p>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Navigation Tabs */}
       <div className="border-b border-slate-200 flex items-center justify-between gap-4 overflow-x-auto no-scrollbar">
@@ -797,8 +796,10 @@ export default function PromotionsCareer({
             </div>
           </div>
 
-          {/* TABLE VIEW */}
-          {viewMode === 'table' ? (
+          {/* SKELETON LOADER OR TABLE/CARDS VIEW */}
+          {isLoading ? (
+            <SkeletonLoader type={viewMode === 'table' ? 'table' : 'card'} rows={6} count={6} />
+          ) : viewMode === 'table' ? (
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">

@@ -30,16 +30,9 @@ import InactiveEmployeesModal from './employee/InactiveEmployeesModal';
 import QuickShiftModal from './employee/QuickShiftModal';
 import ShiftHistoryModal from './employee/ShiftHistoryModal';
 import BulkEmployeeEditModal, { BulkEditFieldValues } from './employee/BulkEmployeeEditModal';
-import EmployeePromotionModal from './employee/EmployeePromotionModal';
-import PromotionLetterModal from './employee/PromotionLetterModal';
-import PromotionsRegistryModal from './employee/PromotionsRegistryModal';
-import { 
-  fetchEmployeePromotions, 
-  EmployeePromotionRecord, 
-  getEmployeePromotionHistory, 
-  getEmployeePromotedYears 
-} from '../lib/promotionEngine';
 import ShiftBadge, { ShiftIcon } from './common/ShiftBadge';
+import SkeletonLoader from './common/SkeletonLoader';
+import { batchGetCachedRanges } from '../lib/dataCache';
 import { verifyAdminDeletePassword } from '../lib/appSettings';
 import { resolvePaletteForModule } from '../lib/colorPalettes';
 import { 
@@ -54,16 +47,15 @@ const getXlsx = () => XLSX;
 interface EmployeeDirectoryProps {
   spreadsheetId: string;
   userSecurityScope?: UserSecurityScope;
-  initialViewPromotions?: boolean;
   adminDisplayName?: string;
+  onNavigate?: (tab: string, extra?: any) => void;
 }
 
-export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, initialViewPromotions, adminDisplayName }: EmployeeDirectoryProps) {
+export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, adminDisplayName, onNavigate }: EmployeeDirectoryProps) {
   const [allEmployeesRaw, setAllEmployeesRaw] = useState<string[][]>([]);
   const [supervisors, setSupervisors] = useState<string[][]>([]);
   const [managers, setManagers] = useState<string[][]>([]);
   const [shiftHistoryRaw, setShiftHistoryRaw] = useState<string[][]>([]);
-  const [promotions, setPromotions] = useState<EmployeePromotionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
@@ -77,7 +69,6 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
   const [shiftFilter, setShiftFilter] = useState<string>('All');
   const [modeFilter, setModeFilter] = useState<string>('All');
   const [areaFilter, setAreaFilter] = useState('All');
-  const [promotionYearFilter, setPromotionYearFilter] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -92,12 +83,6 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
   const [isEditing, setIsEditing] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; name: string } | null>(null);
   const [editModal, setEditModal] = useState<{ isOpen: boolean; emp: EmployeeShiftState | null; password: string; error?: string } | null>(null);
-  
-  // Promotion Modals state
-  const [isPromotionModalOpen, setIsPromotionModalOpen] = useState(false);
-  const [promotionTargetEmployee, setPromotionTargetEmployee] = useState<EmployeeShiftState | null>(null);
-  const [isPromotionsRegistryOpen, setIsPromotionsRegistryOpen] = useState(false);
-  const [selectedLetterPromotion, setSelectedLetterPromotion] = useState<EmployeePromotionRecord | null>(null);
 
   // Quick Shift Modal state
   const [shiftModalEmployee, setShiftModalEmployee] = useState<EmployeeShiftState | null>(null);
@@ -175,19 +160,21 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
     else setIsRefreshing(true);
 
     try {
-      const [empRes, supRes, mgrRes, histRes, promRes] = await Promise.all([
-        getRange(spreadsheetId, 'Employees!A:Z'),
-        getRange(spreadsheetId, 'Supervisors!A:Z'),
-        getRange(spreadsheetId, 'Managers!A:Z'),
-        getRange(spreadsheetId, 'Shift_Assignment_History!A:Z'),
-        fetchEmployeePromotions(spreadsheetId).catch(() => [])
-      ]);
+      const results = await batchGetCachedRanges(
+        spreadsheetId,
+        ['Employees!A:Z', 'Supervisors!A:Z', 'Managers!A:Z', 'Shift_Assignment_History!A:Z'],
+        { bypassCache: !isInitial }
+      );
+
+      const empRes = results['Employees!A:Z'] || [];
+      const supRes = results['Supervisors!A:Z'] || [];
+      const mgrRes = results['Managers!A:Z'] || [];
+      const histRes = results['Shift_Assignment_History!A:Z'] || [];
 
       setAllEmployeesRaw(Array.isArray(empRes) ? stripHeaderRow(empRes) : []);
       setSupervisors(Array.isArray(supRes) ? stripHeaderRow(supRes) : []);
       setManagers(Array.isArray(mgrRes) ? stripHeaderRow(mgrRes) : []);
       setShiftHistoryRaw(Array.isArray(histRes) ? stripHeaderRow(histRes) : []);
-      setPromotions(Array.isArray(promRes) ? promRes : []);
     } catch (err) {
       console.error('Error loading employee directory:', err);
       showToast('Failed to sync employee data from database.');
@@ -196,18 +183,6 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
       setIsRefreshing(false);
     }
   };
-
-  const handlePromotionRecorded = (newRecord: EmployeePromotionRecord) => {
-    setPromotions(prev => [newRecord, ...prev]);
-    showToast(`🎉 Promotion recorded for ${newRecord.employeeName} to ${newRecord.newDesignation}!`);
-    loadData();
-  };
-
-  useEffect(() => {
-    if (initialViewPromotions) {
-      setIsPromotionsRegistryOpen(true);
-    }
-  }, [initialViewPromotions]);
 
   useEffect(() => {
     if (spreadsheetId) {
@@ -230,24 +205,13 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
           handleOpenAddModal();
         }
         if (e.detail.action === 'record-promotion' || e.detail.action === 'promotions') {
-          setIsPromotionsRegistryOpen(true);
+          onNavigate?.('promotions', e.detail);
         }
       }
     };
     window.addEventListener('erp-module-context', handleContext);
     return () => window.removeEventListener('erp-module-context', handleContext);
-  }, []);
-
-  // Map of employeeId -> promotions
-  const promotionsByEmpId = useMemo(() => {
-    const map: Record<string, EmployeePromotionRecord[]> = {};
-    promotions.forEach(p => {
-      const key = (p.employeeId || '').trim().toUpperCase();
-      if (!map[key]) map[key] = [];
-      map[key].push(p);
-    });
-    return map;
-  }, [promotions]);
+  }, [onNavigate]);
 
   // Working Week Boundaries
   const currentWeek = useMemo(() => getSaturdayWeekRange(new Date()), []);
@@ -325,27 +289,14 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
       // Working Area
       if (areaFilter !== 'All' && emp.workingArea !== areaFilter) return false;
 
-      // Promotion Filter
-      if (promotionYearFilter !== 'All') {
-        const empProms = promotionsByEmpId[(emp.id || '').trim().toUpperCase()] || [];
-        if (promotionYearFilter === 'Promoted') {
-          if (empProms.length === 0) return false;
-        } else if (promotionYearFilter === 'Never') {
-          if (empProms.length > 0) return false;
-        } else {
-          const targetYear = parseInt(promotionYearFilter, 10);
-          if (!empProms.some(p => p.promotionYear === targetYear)) return false;
-        }
-      }
-
       return true;
     });
-  }, [employees, deferredSearch, deptFilter, categoryFilter, statusFilter, volunteerFilter, shiftFilter, modeFilter, areaFilter, promotionYearFilter, promotionsByEmpId]);
+  }, [employees, deferredSearch, deptFilter, categoryFilter, statusFilter, volunteerFilter, shiftFilter, modeFilter, areaFilter]);
 
   // Reset page when filters or search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearch, deptFilter, categoryFilter, statusFilter, volunteerFilter, shiftFilter, modeFilter, areaFilter, promotionYearFilter, pageSize]);
+  }, [deferredSearch, deptFilter, categoryFilter, statusFilter, volunteerFilter, shiftFilter, modeFilter, areaFilter, pageSize]);
 
   // Pagination calculations
   const totalFiltered = filteredEmployees.length;
@@ -1323,10 +1274,11 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
 
       {/* Main Content Area */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center p-16 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-          <p className="text-xs font-medium text-slate-500">Calculating dynamic shift schedules and employee directory...</p>
-        </div>
+        viewMode === 'table' ? (
+          <SkeletonLoader type="table" rows={8} />
+        ) : (
+          <SkeletonLoader type="card" count={8} />
+        )
       ) : filteredEmployees.length === 0 ? (
         <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-slate-300">
           <UserX className="w-12 h-12 text-slate-400 mx-auto mb-3" />
@@ -1445,11 +1397,6 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="font-medium text-slate-800">{emp.department || '—'}</div>
                         <div className="text-[11px] text-slate-500">{emp.workingArea || emp.designation || '—'}</div>
-                        {promotionsByEmpId[(emp.id || '').trim().toUpperCase()] && promotionsByEmpId[(emp.id || '').trim().toUpperCase()].length > 0 && (
-                          <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200">
-                            ⭐ Promoted {promotionsByEmpId[(emp.id || '').trim().toUpperCase()][0].promotionYear}
-                          </div>
-                        )}
                       </td>
 
                       {/* Sizes */}
@@ -1646,11 +1593,6 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
                   <div className="mt-3 text-xs space-y-0.5">
                     <div className="text-slate-700 font-medium flex items-center gap-1.5 flex-wrap">
                       <span>{emp.designation || 'No Designation'}</span>
-                      {promotionsByEmpId[(emp.id || '').trim().toUpperCase()] && promotionsByEmpId[(emp.id || '').trim().toUpperCase()].length > 0 && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-900 border border-amber-200">
-                          ⭐ {promotionsByEmpId[(emp.id || '').trim().toUpperCase()][0].promotionYear}
-                        </span>
-                      )}
                     </div>
                     <div className="text-slate-500">{emp.department} {emp.workingArea ? `• ${emp.workingArea}` : ''}</div>
                   </div>
@@ -1769,11 +1711,7 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
         onEdit={(emp) => handleEditClick(emp)}
         onOpenShift={(emp) => handleOpenShiftModal(emp)}
         onOpenHistory={(emp) => setHistoryModalEmployee(emp)}
-        onPromote={(emp) => {
-          setProfileModalEmployee(null);
-          setPromotionTargetEmployee(emp);
-          setIsPromotionModalOpen(true);
-        }}
+        onNavigate={onNavigate}
       />
 
       {/* MODAL 3: INACTIVE EMPLOYEES & REPORTS MODAL */}
@@ -1915,46 +1853,6 @@ export default function EmployeeDirectory({ spreadsheetId, userSecurityScope, in
           </div>
         </div>
       )}
-
-      {/* PROMOTION WORKFLOW MODALS */}
-      {/* 1. Record / Edit Promotion Modal */}
-      <EmployeePromotionModal
-        isOpen={isPromotionModalOpen}
-        onClose={() => {
-          setIsPromotionModalOpen(false);
-          setPromotionTargetEmployee(null);
-        }}
-        employees={employees}
-        preselectedEmployee={promotionTargetEmployee}
-        spreadsheetId={spreadsheetId}
-        adminUserName={adminDisplayName || userSecurityScope?.username || 'Admin Authority'}
-        onPromotionRecorded={handlePromotionRecorded}
-        onViewLetter={(record) => setSelectedLetterPromotion(record)}
-      />
-
-      {/* 2. Promotions & Career Progression Registry Modal */}
-      <PromotionsRegistryModal
-        isOpen={isPromotionsRegistryOpen}
-        onClose={() => setIsPromotionsRegistryOpen(false)}
-        promotions={promotions}
-        employees={employees as any}
-        onOpenNewPromotion={(preselected) => {
-          setPromotionTargetEmployee((preselected as any) || null);
-          setIsPromotionModalOpen(true);
-        }}
-        onViewLetter={(record) => setSelectedLetterPromotion(record)}
-        onViewEmployee={(empId) => {
-          const found = employees.find(e => e.id.toLowerCase() === empId.toLowerCase());
-          if (found) setProfileModalEmployee(found);
-        }}
-      />
-
-      {/* 3. Official Promotion Letter & Certificate Modal */}
-      <PromotionLetterModal
-        isOpen={Boolean(selectedLetterPromotion)}
-        onClose={() => setSelectedLetterPromotion(null)}
-        promotion={selectedLetterPromotion}
-      />
 
     </div>
   );

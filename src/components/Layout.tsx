@@ -5,7 +5,7 @@ import {
   Award, DownloadCloud, Settings, Menu, X, LogOut,
   ChevronDown, User as UserIcon, ChevronRight, Mountain, Eye, BarChart, Download, CheckSquare, Target,
   Shield, Mail, Building, Briefcase, KeyRound, FileCheck2, AlertTriangle, Compass, Sparkles, Search, PartyPopper,
-  Palette, UserCheck, Activity, Layers, Bell, ExternalLink, TrendingUp
+  Palette, UserCheck, Activity, Layers, Bell, ExternalLink, TrendingUp, PanelLeftClose, PanelLeftOpen, Zap
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import EmployeeDirectory from './EmployeeDirectory';
@@ -29,13 +29,21 @@ import PerformanceReviews from './performance/PerformanceReviews';
 import ContactAndPortfolio from './contact/ContactAndPortfolio';
 import GlobalLoadingScreen from './common/GlobalLoadingScreen';
 import IdleSessionWatcher from './common/IdleSessionWatcher';
+import PerformanceMonitorModal from './common/PerformanceMonitorModal';
 import { useGlobalLoading } from '../lib/loadingEngine';
 import CommandPalette from './common/CommandPalette';
 import EmployeeProfileModal from './employee/EmployeeProfileModal';
 import { Employee } from './kpi/types';
 import { EmployeeShiftState, parseEmployeeShiftState } from '../lib/shiftEngine';
-import { getRange } from '../lib/sheets';
+import { getRange, updateRowByPrimaryKey } from '../lib/sheets';
 import { getErpName } from '../lib/appSettings';
+import { 
+  getCachedEmployees, 
+  getCachedShiftEmployees, 
+  getCachedTasks, 
+  getCachedHolidays, 
+  prefetchEssentialData 
+} from '../lib/dataCache';
 import { 
   UserSecurityScope, 
   getAccessLimitDescription, 
@@ -65,7 +73,6 @@ import {
 import { playTaskNotificationSound } from '../lib/taskSoundEngine';
 import { Task, parseTaskRow, buildTaskRow } from '../lib/taskEngine';
 import { HolidayRecord, parseHolidayRow, DEFAULT_2026_HOLIDAYS } from '../lib/holidayEngine';
-import { updateRowByPrimaryKey } from '../lib/sheets';
 
 interface LayoutProps {
   user: User;
@@ -80,6 +87,36 @@ type ModuleType = 'dashboard' | 'tasks' | 'gemba-walks' | '5s-management' | 'dir
 export default function Layout({ user, spreadsheetId, onLogout, accessLevels, userSecurityScope }: LayoutProps) {
   const [activeModule, setActiveModule] = useState<ModuleType | 'skill-dashboard'>('dashboard');
   const [hoveredModule, setHoveredModule] = useState<string | null>(null);
+  
+  // Persistent Sidebar Collapsed State (Remember user's preference across reloads)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('erp_sidebar_collapsed');
+      if (saved !== null) return saved === 'true';
+    }
+    return false; // Default expanded on desktop
+  });
+  const [sidebarSearch, setSidebarSearch] = useState('');
+  const [isPerformanceModalOpen, setIsPerformanceModalOpen] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('erp_sidebar_collapsed', String(next));
+      }
+      return next;
+    });
+  };
+
+  const toggleSectionCollapse = (sectionTitle: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionTitle]: !prev[sectionTitle]
+    }));
+  };
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shiftEmployees, setShiftEmployees] = useState<EmployeeShiftState[]>([]);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -198,51 +235,38 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Load employee master list for modules like KPI and Command Palette
+  // Load employee master list with SWR tier caching
   useEffect(() => {
     if (!spreadsheetId) return;
     const fetchEmployees = async () => {
       try {
-        const raw = await getRange(spreadsheetId, 'Employees!A:Z');
-        if (raw && raw.length > 1) {
-          const mapped: Employee[] = raw.slice(1).map(row => ({
-            id: String(row[0] || '').trim(),
-            name: String(row[1] || '').trim(),
-            designation: String(row[2] || '').trim(),
-            department: String(row[3] || '').trim(),
-            dateOfJoin: String(row[4] || '').trim(),
-            category: String(row[5] || '').trim(),
-            supervisor: String(row[6] || '').trim(),
-            status: String(row[9] || 'Active').trim(),
-            profilePicture: String(row[16] || '').trim(),
-            manager: String(row[17] || '').trim()
-          })).filter(e => e.id);
-          setEmployees(mapped);
-
-          const parsedShifts = raw.slice(1)
-            .filter(row => row && row[0] && String(row[0]).trim() !== '')
-            .map(row => parseEmployeeShiftState(row, new Date()));
-          setShiftEmployees(parsedShifts);
-        }
+        const [mapped, parsedShifts] = await Promise.all([
+          getCachedEmployees(spreadsheetId),
+          getCachedShiftEmployees(spreadsheetId)
+        ]);
+        if (mapped && mapped.length > 0) setEmployees(mapped);
+        if (parsedShifts && parsedShifts.length > 0) setShiftEmployees(parsedShifts);
       } catch (err) {
         console.error('Failed to load master employees in Layout:', err);
       }
     };
     fetchEmployees();
+
+    // Warm cache in background for fast navigations
+    prefetchEssentialData(spreadsheetId).catch(() => {});
   }, [spreadsheetId]);
 
-  // Load Tasks and Holidays for intelligent Daily Task Reminders
+  // Load Tasks and Holidays with SWR tier caching for intelligent Daily Task Reminders
   useEffect(() => {
     if (!spreadsheetId) return;
-    const loadTasksAndHolidays = async () => {
+    const loadTasksAndHolidays = async (forceRefresh: boolean = false) => {
       try {
-        const [taskData, holidayData] = await Promise.all([
-          getRange(spreadsheetId, 'Tasks!A:Z'),
-          getRange(spreadsheetId, 'Holidays!A:Z')
+        const [parsedTasks, parsedHols] = await Promise.all([
+          getCachedTasks(spreadsheetId, forceRefresh),
+          getCachedHolidays(spreadsheetId, forceRefresh)
         ]);
 
-        if (taskData && taskData.length > 1) {
-          const parsedTasks = taskData.slice(1).map(r => parseTaskRow(r)).filter(t => t.id);
+        if (parsedTasks && parsedTasks.length > 0) {
           setTasks(parsedTasks);
 
           // Automated Task Assignment Detection & Notification with Sound
@@ -252,8 +276,7 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
           setUnreadAssignmentCount(getUnreadAssignmentCount(currentEmpId, currentEmpName));
         }
 
-        if (holidayData && holidayData.length > 1) {
-          const parsedHols = holidayData.slice(1).map((r, i) => parseHolidayRow(r, i));
+        if (parsedHols && parsedHols.length > 0) {
           setHolidays(parsedHols);
         } else {
           setHolidays(DEFAULT_2026_HOLIDAYS as HolidayRecord[]);
@@ -264,19 +287,19 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
       }
     };
 
-    loadTasksAndHolidays();
+    loadTasksAndHolidays(false);
 
-    // Periodic poll every 25 seconds for cross-user assignment detection
+    // Periodic poll every 45 seconds for cross-user assignment detection (using SWR cache to avoid API quota)
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        loadTasksAndHolidays();
+        loadTasksAndHolidays(false);
       }
-    }, 25000);
+    }, 45000);
 
     const handleDbUpdate = (evt: any) => {
       const sheet = evt?.detail?.sheetName;
       if (!sheet || sheet === 'Tasks' || sheet === 'Holidays') {
-        loadTasksAndHolidays();
+        loadTasksAndHolidays(true);
       }
     };
     const handleTaskAssigned = () => {
@@ -369,24 +392,28 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
   };
 
   const navigation = [
-    { id: 'dashboard', name: 'ERP Dashboard', icon: Menu, moduleName: 'All' },
-    { id: 'tasks', name: 'Daily Tasks', icon: CheckSquare, moduleName: 'All' },
-    { id: 'gemba-walks', name: 'Gemba Walks', icon: Eye, moduleName: 'All' },
-    { id: '5s-management', name: '5S & Visual Mgmt', icon: Sparkles, moduleName: '5S & Visual Management' },
-    { id: 'breakdown', name: 'Breakdown Log', icon: AlertTriangle, moduleName: 'Machine & Skills' },
-    { id: 'directory', name: 'Employee Directory', icon: Users, moduleName: 'Employee Directory' },
-    { id: 'promotions', name: 'Promotions & Career', icon: TrendingUp, moduleName: 'Employee Directory' },
-    { id: 'anniversaries', name: 'Birthdays & Anniversaries', icon: PartyPopper, moduleName: 'All' },
-    { id: 'leave', name: 'Leave', icon: Calendar, moduleName: 'Leave Management' },
-    { id: 'overtime', name: 'Overtime', icon: Clock, moduleName: 'Overtime' },
-    { id: 'machine', name: 'Machine Capacity', icon: Wrench, moduleName: 'Machine & Skills' },
-    { id: 'shifts', name: 'Shift Assignments', icon: Briefcase, moduleName: 'Shift Assignments' },
-    { id: 'skill-dashboard', name: 'Skill Matrix', icon: Target, moduleName: 'Machine & Skills' },
-    { id: 'kpi', name: 'KPI Performance', icon: Target, moduleName: 'KPI Performance' },
-    { id: 'practices', name: 'Best Practices', icon: Award, moduleName: 'Best Practices' },
-    { id: 'contact-portfolio', name: 'Developer Contact', icon: UserIcon, moduleName: 'All' },
-    { id: 'reports', name: 'Reports & Export', icon: DownloadCloud, moduleName: 'Reports & Export' },
-    { id: 'settings', name: 'Settings', icon: Settings, moduleName: 'Settings' },
+    { id: 'dashboard', name: 'ERP Dashboard', icon: Menu, moduleName: 'All', category: 'Executive & Overview' },
+    { id: 'tasks', name: 'Daily Tasks', icon: CheckSquare, moduleName: 'All', category: 'Executive & Overview' },
+    { id: 'gemba-walks', name: 'Gemba Walks', icon: Eye, moduleName: 'All', category: 'Executive & Overview' },
+    { id: '5s-management', name: '5S & Visual Mgmt', icon: Sparkles, moduleName: '5S & Visual Management', category: 'Executive & Overview' },
+
+    { id: 'breakdown', name: 'Breakdown Log', icon: AlertTriangle, moduleName: 'Machine & Skills', category: 'Operations & Factory' },
+    { id: 'machine', name: 'Machine Capacity', icon: Wrench, moduleName: 'Machine & Skills', category: 'Operations & Factory' },
+    { id: 'shifts', name: 'Shift Assignments', icon: Briefcase, moduleName: 'Shift Assignments', category: 'Operations & Factory' },
+    { id: 'skill-dashboard', name: 'Skill Matrix', icon: Target, moduleName: 'Machine & Skills', category: 'Operations & Factory' },
+
+    { id: 'directory', name: 'Employee Directory', icon: Users, moduleName: 'Employee Directory', category: 'Workforce & HR' },
+    { id: 'promotions', name: 'Promotions & Career', icon: TrendingUp, moduleName: 'Employee Directory', category: 'Workforce & HR' },
+    { id: 'anniversaries', name: 'Birthdays & Anniversaries', icon: PartyPopper, moduleName: 'All', category: 'Workforce & HR' },
+    { id: 'leave', name: 'Leave', icon: Calendar, moduleName: 'Leave Management', category: 'Workforce & HR' },
+    { id: 'overtime', name: 'Overtime', icon: Clock, moduleName: 'Overtime', category: 'Workforce & HR' },
+
+    { id: 'kpi', name: 'KPI Performance', icon: Target, moduleName: 'KPI Performance', category: 'Analytics & Performance' },
+    { id: 'practices', name: 'Best Practices', icon: Award, moduleName: 'Best Practices', category: 'Analytics & Performance' },
+    { id: 'reports', name: 'Reports & Export', icon: DownloadCloud, moduleName: 'Reports & Export', category: 'Analytics & Performance' },
+
+    { id: 'settings', name: 'Settings', icon: Settings, moduleName: 'Settings', category: 'System & Organization' },
+    { id: 'contact-portfolio', name: 'Developer Contact', icon: UserIcon, moduleName: 'All', category: 'System & Organization' },
   ];
 
   const hasAccess = (moduleName: string) => {
@@ -405,7 +432,33 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
     return false;
   };
 
-  const filteredNavigation = navigation.filter(item => hasAccess(item.moduleName));
+  const filteredNavigation = useMemo(() => {
+    return navigation
+      .filter(item => hasAccess(item.moduleName))
+      .filter(item => {
+        if (!sidebarSearch.trim()) return true;
+        const q = sidebarSearch.toLowerCase();
+        return item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q);
+      });
+  }, [accessLevels, userSecurityScope, sidebarSearch]);
+
+  const navigationSections = useMemo(() => {
+    const order = [
+      'Executive & Overview',
+      'Operations & Factory',
+      'Workforce & HR',
+      'Analytics & Performance',
+      'System & Organization'
+    ];
+    const sections: Array<{ category: string; items: typeof filteredNavigation }> = [];
+    order.forEach(cat => {
+      const items = filteredNavigation.filter(i => i.category === cat);
+      if (items.length > 0) {
+        sections.push({ category: cat, items });
+      }
+    });
+    return sections;
+  }, [filteredNavigation]);
 
   useEffect(() => {
     if (filteredNavigation.length > 0 && !hasAccess(navigation.find(n => n.id === activeModule)?.moduleName || '')) {
@@ -420,7 +473,7 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
       case 'tasks': return <Tasks spreadsheetId={spreadsheetId} user={user} userSecurityScope={userSecurityScope} />;
       case 'gemba-walks': return <GembaWalks spreadsheetId={spreadsheetId} user={user} userSecurityScope={userSecurityScope} />;
       case '5s-management': return <FiveSManagement spreadsheetId={spreadsheetId} user={user} userSecurityScope={userSecurityScope} onNavigate={(tab) => setActiveModule(tab as any)} />;
-      case 'directory': return <EmployeeDirectory spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} adminDisplayName={user?.displayName || user?.email || userSecurityScope?.username} />;
+      case 'directory': return <EmployeeDirectory spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} adminDisplayName={user?.displayName || user?.email || userSecurityScope?.username} onNavigate={(tab, extra) => handleCommandNavigate(tab, extra)} />;
       case 'promotions': return <PromotionsCareer spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} adminDisplayName={user?.displayName || user?.email || userSecurityScope?.username} onNavigate={(tab, extra) => handleCommandNavigate(tab, extra)} />;
       case 'anniversaries': return <WorkAnniversaries spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} onNavigate={(tab, extra) => handleCommandNavigate(tab, extra)} />;
       case 'kpi': return <KPIPerformance spreadsheetId={spreadsheetId} employees={employees} accessLevels={accessLevels} userEmail={user.email || ''} userSecurityScope={userSecurityScope} user={user} />;
@@ -688,133 +741,272 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
           )}
         </AnimatePresence>
 
-        {/* Desktop Expandable Sidebar (Visible only on md+ screens) */}
+        {/* Desktop Smart Collapsible Sidebar (Visible on md+ screens) */}
         <aside 
-          className="hidden md:flex w-[74px] lg:w-[82px] hover:w-[250px] transition-all duration-300 ease-out group bg-gradient-to-b from-[#0F172A] via-[#111C30] to-[#0B132B] text-white shrink-0 flex-col justify-between relative z-20 overflow-hidden shadow-[4px_0_24px_rgba(0,0,0,0.25)] border-r border-slate-800/80"
+          className={`hidden md:flex transition-all duration-300 ease-in-out bg-gradient-to-b from-[#0B1120] via-[#0F172A] to-[#090E1A] text-white shrink-0 flex-col justify-between relative z-20 shadow-[4px_0_24px_rgba(0,0,0,0.35)] border-r border-slate-800/80 ${
+            isSidebarCollapsed ? 'w-[74px]' : 'w-[260px]'
+          }`}
           onMouseLeave={() => setHoveredModule(null)}
         >
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="h-[76px] bg-[#090F1E] flex items-center px-[22px] mb-2 overflow-hidden shrink-0 border-b border-white/10 relative z-10">
-              <div 
-                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-xs border transition-all duration-300"
-                style={{ 
-                  backgroundColor: `${activePalette.primaryHex}40`, 
-                  borderColor: `${activePalette.secondaryHex}60` 
-                }}
-              >
-                <Mountain className="w-5 h-5 drop-shadow-sm" style={{ color: activePalette.secondaryHex }} />
-              </div>
-              <div className="ml-3.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap overflow-hidden">
-                <span className="text-white font-black tracking-wide text-sm block leading-tight">
-                  {getErpName().toUpperCase()}
-                </span>
-                <span 
-                  className="text-[10px] font-bold uppercase tracking-wider block"
-                  style={{ color: activePalette.secondaryHex }}
+            {/* Sidebar Brand Header */}
+            <div className={`h-[72px] bg-[#070C18] flex items-center px-3 mb-1 shrink-0 border-b border-white/10 relative z-10 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+              <div className="flex items-center min-w-0">
+                <div 
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm border transition-all duration-300"
+                  style={{ 
+                    backgroundColor: `${activePalette.primaryHex}35`, 
+                    borderColor: `${activePalette.secondaryHex}50` 
+                  }}
+                  title={getErpName()}
                 >
-                  {activePalette.primaryName} • {activePalette.secondaryName}
-                </span>
-              </div>
-            </div>
-
-            {/* Command Palette Quick Search in Desktop Sidebar */}
-            <div className="px-2 pt-2 pb-1">
-              <button
-                onClick={() => setIsCommandPaletteOpen(true)}
-                className="w-full h-10 flex items-center relative transition-all duration-200 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 group cursor-pointer shadow-xs"
-                title="Quick Search & Navigation (Cmd+K / Ctrl+K)"
-              >
-                <div className="w-7 h-7 flex items-center justify-center shrink-0">
-                  <Search className="w-4 h-4 text-slate-400 group-hover:text-amber-300 transition-transform group-hover:scale-110" />
+                  <Mountain className="w-5 h-5 drop-shadow-sm" style={{ color: activePalette.secondaryHex }} />
                 </div>
-                <span className="ml-3 text-xs font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  Search & Jump
-                </span>
-                <kbd className="ml-auto px-1.5 py-0.5 bg-black/40 border border-white/20 rounded text-[10px] font-mono font-bold text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity shadow-2xs">
-                  ⌘K
-                </kbd>
+                {!isSidebarCollapsed && (
+                  <div className="ml-3 whitespace-nowrap overflow-hidden">
+                    <span className="text-white font-black tracking-wide text-sm block leading-tight truncate max-w-[145px]">
+                      {getErpName()}
+                    </span>
+                    <span 
+                      className="text-[10px] font-bold uppercase tracking-wider block"
+                      style={{ color: activePalette.secondaryHex }}
+                    >
+                      Enterprise ERP
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Sidebar Collapse Toggle Button */}
+              <button
+                onClick={toggleSidebarCollapse}
+                className={`p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer ${isSidebarCollapsed ? 'absolute -right-3 top-6 bg-slate-900 border border-slate-700 shadow-md z-30' : ''}`}
+                title={isSidebarCollapsed ? 'Expand Sidebar (Ctrl+\\)' : 'Collapse Sidebar'}
+              >
+                {isSidebarCollapsed ? (
+                  <PanelLeftOpen className="w-4 h-4 text-indigo-400" />
+                ) : (
+                  <PanelLeftClose className="w-4 h-4" />
+                )}
               </button>
             </div>
 
-            <div className="py-2.5 space-y-1 px-2 flex-1 overflow-y-auto custom-scrollbar">
-              {filteredNavigation.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeModule === item.id;
-                const isHovered = hoveredModule === item.id;
-                const itemPalette = resolvePaletteForModule(item.id, themePreference);
-                
+            {/* Expanded Search & Quick Jump Input */}
+            {!isSidebarCollapsed ? (
+              <div className="px-3 pt-2 pb-1 space-y-1.5">
+                {/* Navigator Quick Filter Input */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={sidebarSearch}
+                    onChange={(e) => setSidebarSearch(e.target.value)}
+                    placeholder="Filter navigators..."
+                    className="w-full h-8 pl-8 pr-7 text-xs rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-400 focus:outline-hidden focus:border-indigo-500/80 focus:bg-white/10 transition"
+                  />
+                  {sidebarSearch && (
+                    <button
+                      onClick={() => setSidebarSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Command Palette Jump Button */}
+                <button
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  className="w-full h-7 flex items-center justify-between px-2.5 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/50 text-indigo-300 border border-indigo-500/20 text-[11px] font-semibold transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span>Quick Command</span>
+                  </span>
+                  <kbd className="px-1 py-0.2 bg-black/40 border border-white/20 rounded text-[9px] font-mono">⌘K</kbd>
+                </button>
+              </div>
+            ) : (
+              /* Collapsed Command Palette Icon */
+              <div className="px-2 pt-2 pb-1 flex justify-center">
+                <button
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-amber-300 border border-white/10 transition cursor-pointer relative group/cmd"
+                  title="Quick Command (⌘K)"
+                >
+                  <Search className="w-4 h-4" />
+                  <div className="absolute left-[72px] top-1/2 -translate-y-1/2 px-2.5 py-1 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xl border border-slate-700 pointer-events-none opacity-0 group-hover/cmd:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                    Command Palette (⌘K)
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {/* Categorized Navigator Items List */}
+            <div className="py-2 px-2 flex-1 overflow-y-auto custom-scrollbar space-y-3">
+              {navigationSections.map((section) => {
+                const isSectionCollapsed = !!collapsedSections[section.category];
                 return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveModule(item.id as ModuleType)}
-                    onMouseEnter={() => setHoveredModule(item.id)}
-                    className={`w-full h-11 flex items-center relative transition-all duration-200 px-3 rounded-xl ${
-                      isActive 
-                        ? 'text-white font-bold' 
-                        : isHovered 
-                        ? 'text-white bg-white/10 font-semibold' 
-                        : 'text-slate-400 hover:text-white font-medium'
-                    }`}
-                    title={`${item.name} (${itemPalette.primaryName} / ${itemPalette.secondaryName})`}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="sidebar-active-pill"
-                        className="absolute inset-0 rounded-xl shadow-md border"
-                        style={{
-                          background: `linear-gradient(135deg, ${activePalette.gradientFrom}, ${activePalette.gradientTo})`,
-                          borderColor: `${activePalette.secondaryHex}60`,
-                          boxShadow: `0 4px 16px ${activePalette.primaryHex}80`
-                        }}
-                        initial={false}
-                        transition={{ type: "spring", stiffness: 350, damping: 32 }}
-                      />
+                  <div key={section.category} className="space-y-0.5">
+                    {/* Section Header */}
+                    {!isSidebarCollapsed ? (
+                      <button
+                        onClick={() => toggleSectionCollapse(section.category)}
+                        className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-200 transition select-none cursor-pointer"
+                      >
+                        <span className="truncate">{section.category}</span>
+                        {isSectionCollapsed ? (
+                          <ChevronRight className="w-3 h-3 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="w-3 h-3 text-slate-400" />
+                        )}
+                      </button>
+                    ) : (
+                      <div className="w-full h-px bg-white/10 my-1" />
                     )}
-                    <div className="w-7 h-7 flex items-center justify-center shrink-0 relative z-10">
-                      <Icon 
-                        className={`w-5 h-5 transition-all duration-300 ${
-                          isActive 
-                            ? 'text-white scale-110 drop-shadow-md' 
-                            : isHovered 
-                            ? 'scale-125 rotate-6 text-white group-hover-icon-anim' 
-                            : 'text-slate-400'
-                        }`} 
-                        style={!isActive && isHovered ? { color: itemPalette.secondaryHex } : undefined}
-                      />
-                    </div>
-                    <span className="ml-3 relative z-10 text-[13px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 truncate">
-                      {item.name}
-                    </span>
-                    {isActive && (
-                      <div 
-                        className="w-2 h-2 rounded-full ml-auto relative z-10 opacity-0 group-hover:opacity-100 transition-opacity shadow-xs" 
-                        style={{ backgroundColor: activePalette.secondaryHex }}
-                      />
-                    )}
-                  </button>
+
+                    {/* Section Navigators */}
+                    {(!isSectionCollapsed || isSidebarCollapsed) && section.items.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activeModule === item.id;
+                      const isHovered = hoveredModule === item.id;
+                      const itemPalette = resolvePaletteForModule(item.id, themePreference);
+
+                      return (
+                        <div key={item.id} className="relative group/nav-item">
+                          <button
+                            onClick={() => setActiveModule(item.id as ModuleType)}
+                            onMouseEnter={() => setHoveredModule(item.id)}
+                            className={`w-full h-10 flex items-center relative transition-all duration-150 px-2.5 rounded-xl cursor-pointer ${
+                              isSidebarCollapsed ? 'justify-center' : 'justify-start'
+                            } ${
+                              isActive 
+                                ? 'text-white font-bold' 
+                                : isHovered 
+                                ? 'text-white bg-white/10 font-semibold' 
+                                : 'text-slate-400 hover:text-white font-medium'
+                            }`}
+                          >
+                            {isActive && (
+                              <motion.div
+                                layoutId="sidebar-active-pill"
+                                className="absolute inset-0 rounded-xl shadow-md border"
+                                style={{
+                                  background: `linear-gradient(135deg, ${activePalette.gradientFrom}, ${activePalette.gradientTo})`,
+                                  borderColor: `${activePalette.secondaryHex}60`,
+                                  boxShadow: `0 4px 14px ${activePalette.primaryHex}60`
+                                }}
+                                initial={false}
+                                transition={{ type: "spring", stiffness: 350, damping: 32 }}
+                              />
+                            )}
+
+                            {/* Navigator Icon */}
+                            <div className="w-6 h-6 flex items-center justify-center shrink-0 relative z-10">
+                              <Icon 
+                                className={`w-4 h-4 transition-all duration-200 ${
+                                  isActive 
+                                    ? 'text-white scale-110 drop-shadow-md' 
+                                    : isHovered 
+                                    ? 'scale-115 text-white' 
+                                    : 'text-slate-400'
+                                }`} 
+                                style={!isActive && isHovered ? { color: itemPalette.secondaryHex } : undefined}
+                              />
+                            </div>
+
+                            {/* Navigator Label (Expanded mode) */}
+                            {!isSidebarCollapsed && (
+                              <>
+                                <span className="ml-2.5 relative z-10 text-[12.5px] whitespace-nowrap truncate font-medium">
+                                  {item.name}
+                                </span>
+                                {isActive && (
+                                  <div 
+                                    className="w-1.5 h-1.5 rounded-full ml-auto relative z-10 shadow-xs" 
+                                    style={{ backgroundColor: activePalette.secondaryHex }}
+                                  />
+                                )}
+                              </>
+                            )}
+                          </button>
+
+                          {/* Collapsed Tooltip on Hover */}
+                          {isSidebarCollapsed && (
+                            <div className="absolute left-[70px] top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold text-xs shadow-2xl z-50 pointer-events-none opacity-0 group-hover/nav-item:opacity-100 transition-opacity whitespace-nowrap flex items-center gap-2">
+                              <span>{item.name}</span>
+                              {isActive && (
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 );
               })}
             </div>
           </div>
 
-          <div className="p-2.5 shrink-0 border-t border-white/10 bg-[#090F1E]/80 relative z-10">
-            <button
-              onClick={onLogout}
-              onMouseEnter={() => setHoveredModule('logout')}
-              className={`w-full h-11 flex items-center relative transition-all duration-200 px-3 rounded-xl ${
-                hoveredModule === 'logout' 
-                  ? 'text-rose-300 bg-rose-500/20 border border-rose-500/30 font-bold' 
-                  : 'text-slate-400 hover:text-rose-300 hover:bg-white/5 font-medium'
-              }`}
-              title="Logout"
-            >
-              <div className="w-7 h-7 flex items-center justify-center shrink-0">
-                <LogOut className="w-5 h-5 text-rose-400" />
+          {/* Bottom Sidebar User Profile & Actions Footer */}
+          <div className="p-2.5 shrink-0 border-t border-white/10 bg-[#070C18] relative z-10 space-y-1.5">
+            {/* Performance Telemetry Trigger Button (Admin / Manager) */}
+            {(userSecurityScope?.isAdmin || userSecurityScope?.isManager) && (
+              <button
+                onClick={() => setIsPerformanceModalOpen(true)}
+                className={`w-full h-8 flex items-center rounded-lg px-2 text-xs font-semibold transition cursor-pointer bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/30 ${
+                  isSidebarCollapsed ? 'justify-center' : 'justify-between'
+                }`}
+                title="Performance & Cache Telemetry"
+              >
+                <div className="flex items-center gap-2">
+                  <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  {!isSidebarCollapsed && <span>Cache Telemetry</span>}
+                </div>
+                {!isSidebarCollapsed && <Zap className="w-3 h-3 text-amber-400" />}
+              </button>
+            )}
+
+            {/* Profile Info Row */}
+            {!isSidebarCollapsed ? (
+              <div className="flex items-center justify-between p-1.5 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                    {currentUserPhoto ? (
+                      <img src={currentUserPhoto} alt={displayName} className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{getInitials(displayName)}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white truncate max-w-[110px]">{displayName}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{roleName}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={onLogout}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/20 transition cursor-pointer"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
-              <span className="ml-3 text-[13px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 font-bold text-rose-300 truncate">
-                Sign Out
-              </span>
-            </button>
+            ) : (
+              /* Collapsed Sign Out Button */
+              <div className="flex justify-center relative group/logout">
+                <button
+                  onClick={onLogout}
+                  className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-300 hover:bg-rose-500/20 border border-transparent hover:border-rose-500/30 transition cursor-pointer"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4 text-rose-400" />
+                </button>
+                <div className="absolute left-[70px] top-1/2 -translate-y-1/2 px-2.5 py-1 bg-slate-900 text-rose-300 text-xs font-semibold rounded-lg shadow-xl border border-slate-700 pointer-events-none opacity-0 group-hover/logout:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                  Sign Out
+                </div>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -953,6 +1145,18 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
                   <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
                   <span>{onlineUsers.length + 1} online</span>
                 </div>
+
+                {/* Live Cache & Performance Telemetry (Admins / Managers) */}
+                {(userSecurityScope?.isAdmin || userSecurityScope?.isManager) && (
+                  <button
+                    onClick={() => setIsPerformanceModalOpen(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition shadow-2xs cursor-pointer"
+                    title="Google Sheets Caching & Performance Telemetry"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                    <span className="hidden sm:inline">Telemetry</span>
+                  </button>
+                )}
               </div>
 
               {/* Daily Task & Task Assignment Notification Bell */}
@@ -1303,6 +1507,13 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
         onNavigateToTasks={() => {
           setActiveModule('tasks');
         }}
+      />
+
+      {/* Performance & Cache Telemetry Modal */}
+      <PerformanceMonitorModal
+        isOpen={isPerformanceModalOpen}
+        onClose={() => setIsPerformanceModalOpen(false)}
+        spreadsheetId={spreadsheetId}
       />
 
       {/* Global Application Loading Animation Overlay */}
