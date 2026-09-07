@@ -32,16 +32,25 @@ if (typeof window !== 'undefined') {
       reason.includes('the database connection is closing') ||
       stack.includes('idbdatabase') ||
       stack.includes('indexeddb') ||
-      stack.includes('firebaselocalstoragedb')
+      stack.includes('firebaselocalstoragedb') ||
+      msg.includes('unexpected eof') ||
+      msg.includes('unexpected end of json') ||
+      reason.includes('unexpected eof') ||
+      reason.includes('unexpected end of json')
     );
   };
 
-  // Filter out internal Firebase Auth assertion error from console.error to avoid false alarm logs
+  // Filter out internal Firebase Auth assertion error and transient stream EOF from console.error
   const originalConsoleError = console.error;
   console.error = (...args: any[]) => {
     const fullText = args.map(a => (typeof a === 'string' ? a : a?.message || a?.toString?.() || '')).join(' ');
+    const lowerText = fullText.toLowerCase();
     if (fullText.includes('Pending promise was never set')) {
       console.warn('Suppressed Firebase Auth internal assertion warning:', fullText);
+      return;
+    }
+    if (lowerText.includes('unexpected eof') || lowerText.includes('unexpected end of json input')) {
+      console.warn('Suppressed transient JSON stream parse warning:', fullText);
       return;
     }
     originalConsoleError.apply(console, args);

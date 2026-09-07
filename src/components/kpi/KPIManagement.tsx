@@ -49,7 +49,7 @@ export default function KPIManagement({
 
   // Determine if current user is an Admin
   const isAdmin = useMemo(() => {
-    if (userEmail && userEmail.toLowerCase() === 'noor.alam1750@gmail.com') return true;
+    if (userEmail && (userEmail.toLowerCase() === 'noor.alam1750@gmail.com' || userEmail.toLowerCase() === 'smltrimsbd@gmail.com')) return true;
     if (userSecurityScope?.isAdmin) return true;
     if (!accessLevels || accessLevels.length === 0) return true; // Default fallback
     return accessLevels.includes('All') || accessLevels.includes('Settings') || accessLevels.includes('Admin');

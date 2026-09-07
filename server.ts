@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -85,8 +86,23 @@ Return a strictly valid JSON object matching this exact structure:
         }
       });
 
-      const responseText = response.text || "{}";
-      const parsed = JSON.parse(responseText);
+      let parsed = {};
+      try {
+        let cleanText = (response.text || "").trim();
+        if (cleanText.startsWith("```json")) {
+          cleanText = cleanText.slice(7);
+        } else if (cleanText.startsWith("```")) {
+          cleanText = cleanText.slice(3);
+        }
+        if (cleanText.endsWith("```")) {
+          cleanText = cleanText.slice(0, -3);
+        }
+        cleanText = cleanText.trim();
+        parsed = cleanText ? JSON.parse(cleanText) : {};
+      } catch (jsonErr) {
+        console.warn("Could not parse AI response as JSON:", jsonErr);
+        parsed = { fallback: true };
+      }
       return res.json(parsed);
     } catch (err: any) {
       console.warn("Gemini Gemba Assist failed, returning fallback signal:", err?.message || err);

@@ -1,4 +1,5 @@
 import { getAccessToken } from './firebase';
+import { safeJsonParse, safeResponseJson } from './safeJson';
 
 const BASE_URL = 'https://sheets.googleapis.com/v4/spreadsheets';
 
@@ -570,8 +571,14 @@ export async function createSpreadsheet(): Promise<string> {
       return 'local-storage-db';
     }
 
-    const data = await response.json();
+    const data = await safeResponseJson<{ spreadsheetId?: string }>(response, {});
     const spreadsheetId = data.spreadsheetId;
+    if (!spreadsheetId) {
+      for (const [sheet, defaultData] of Object.entries(DEFAULT_LOCAL_DB)) {
+        setLocalSheet(sheet, defaultData);
+      }
+      return 'local-storage-db';
+    }
 
     // Initialize headers and seed data
     const headers = [
@@ -789,7 +796,7 @@ export async function getRange(spreadsheetId: string, range: string): Promise<st
         return (range.includes('!A2') || range.includes('!A2:')) ? stripHeaderRow(data) : data;
       }
 
-      const data = await response.json();
+      const data = await safeResponseJson<{ values?: string[][] }>(response, {});
       const result: string[][] = data.values || [];
       
       // Update memory and local cache
@@ -842,7 +849,7 @@ export async function batchGetRanges(spreadsheetId: string, ranges: string[]): P
       return results;
     }
 
-    const json = await response.json();
+    const json = await safeResponseJson<{ valueRanges?: any[] }>(response, {});
     const valueRanges = json.valueRanges || [];
     
     valueRanges.forEach((vr: any, idx: number) => {
@@ -1039,8 +1046,8 @@ export async function deleteRowByPrimaryKey(spreadsheetId: string, sheetName: st
         cache: 'no-store'
       });
       if (!metaResponse.ok) return;
-      const metaData = await metaResponse.json();
-      const sheet = metaData.sheets.find((s: any) => s.properties.title === sheetName);
+      const metaData = await safeResponseJson<{ sheets?: any[] }>(metaResponse, {});
+      const sheet = metaData.sheets?.find((s: any) => s.properties?.title === sheetName);
       
       if (!sheet) return;
       const sheetId = sheet.properties.sheetId;
@@ -1094,8 +1101,8 @@ export async function ensureSheetExists(spreadsheetId: string, sheetName: string
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (!getResponse.ok) return;
-    const data = await getResponse.json();
-    const exists = data.sheets.some((s: any) => s.properties.title === sheetName);
+    const data = await safeResponseJson<{ sheets?: any[] }>(getResponse, {});
+    const exists = data.sheets?.some((s: any) => s.properties?.title === sheetName);
 
     if (!exists) {
       const addResponse = await fetch(`${BASE_URL}/${spreadsheetId}:batchUpdate`, {
@@ -1202,7 +1209,7 @@ export async function getHiddenKpiEmployeeIds(spreadsheetId: string): Promise<st
   } catch (err) {
     console.warn('Failed to fetch hidden KPI list from sheets, using local storage cache:', err);
     const cached = localStorage.getItem('erp_hidden_kpi_employee_ids');
-    return cached ? JSON.parse(cached) : ['EMP003'];
+    return safeJsonParse<string[]>(cached, ['EMP003']);
   }
 }
 

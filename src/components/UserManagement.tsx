@@ -255,7 +255,7 @@ export default function UserManagement({ spreadsheetId, user, userSecurityScope,
       employeeId: formData.employeeId,
       employeeName: formData.employeeName,
       inputPermissions: formData.inputPermissions,
-      isAdmin: formData.role === 'Admin' || formData.username.toLowerCase() === 'noor.alam1750@gmail.com',
+      isAdmin: formData.role === 'Admin' || formData.username.toLowerCase() === 'noor.alam1750@gmail.com' || formData.username.toLowerCase() === 'smltrimsbd@gmail.com',
       isSuperuser: formData.role === 'Superuser',
       isManager: formData.role === 'Manager',
       isSupervisor: formData.role === 'Supervisor' || formData.role === 'Manager' || formData.role === 'Superuser',
@@ -468,7 +468,7 @@ export default function UserManagement({ spreadsheetId, user, userSecurityScope,
   };
 
   const handleDelete = (username: string) => {
-    if (username.toLowerCase() === 'noor.alam1750@gmail.com') {
+    if (username.toLowerCase() === 'noor.alam1750@gmail.com' || username.toLowerCase() === 'smltrimsbd@gmail.com') {
       alert('Cannot delete the primary Admin account.');
       return;
     }
@@ -1094,7 +1094,7 @@ export default function UserManagement({ spreadsheetId, user, userSecurityScope,
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          {row[0]?.toLowerCase() !== 'noor.alam1750@gmail.com' && (
+                          {row[0]?.toLowerCase() !== 'noor.alam1750@gmail.com' && row[0]?.toLowerCase() !== 'smltrimsbd@gmail.com' && (
                             <button 
                               onClick={() => handleDelete(row[0])} 
                               className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition" 

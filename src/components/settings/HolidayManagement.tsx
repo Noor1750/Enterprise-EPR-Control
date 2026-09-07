@@ -81,7 +81,7 @@ export default function HolidayManagement({ spreadsheetId, user, userSecuritySco
     details?: string;
   } | null>(null);
 
-  const isAdmin = userSecurityScope?.isAdmin || user?.role?.toLowerCase() === 'admin' || user?.email === 'noor.alam1750@gmail.com';
+  const isAdmin = userSecurityScope?.isAdmin || user?.role?.toLowerCase() === 'admin' || user?.email === 'noor.alam1750@gmail.com' || user?.email === 'smltrimsbd@gmail.com';
   const isSupervisor = userSecurityScope?.isSupervisor || user?.role?.toLowerCase() === 'supervisor';
   const canManage = isAdmin || isSupervisor;
 

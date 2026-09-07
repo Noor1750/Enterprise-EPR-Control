@@ -50,7 +50,7 @@ export default function Tasks({ spreadsheetId, user, userSecurityScope }: TasksP
     details?: string;
   } | null>(null);
   
-  const isAdminOrManager = isUserManagerOrAdmin(userSecurityScope) || user?.email?.toLowerCase() === 'noor.alam1750@gmail.com';
+  const isAdminOrManager = isUserManagerOrAdmin(userSecurityScope) || user?.email?.toLowerCase() === 'noor.alam1750@gmail.com' || user?.email?.toLowerCase() === 'smltrimsbd@gmail.com';
   
   // View mode: 'all' | 'my-assigned' | 'created-by-me' | 'urgent-today' | 'departments'
   const [viewMode, setViewMode] = useState<'all' | 'my-assigned' | 'created-by-me' | 'urgent-today' | 'departments'>(

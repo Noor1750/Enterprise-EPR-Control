@@ -27,7 +27,7 @@ export default function TaskDashboard({
   userEmail,
   userDisplayName
 }: TaskDashboardProps) {
-  const isAdminOrManager = isUserManagerOrAdmin(userSecurityScope) || userEmail?.toLowerCase() === 'noor.alam1750@gmail.com';
+  const isAdminOrManager = isUserManagerOrAdmin(userSecurityScope) || userEmail?.toLowerCase() === 'noor.alam1750@gmail.com' || userEmail?.toLowerCase() === 'smltrimsbd@gmail.com';
   
   const empId = userSecurityScope?.employeeId?.toUpperCase() || '';
   const userName = (userSecurityScope?.employeeName || userDisplayName || '').toLowerCase();

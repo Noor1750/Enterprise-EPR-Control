@@ -2,6 +2,7 @@ import { Employee } from '../components/kpi/types';
 import { notifyUniversalAssignment, UniversalAssignmentNotification } from './universalAssignmentNotifier';
 import { format, isAfter, parseISO } from 'date-fns';
 import { ensureSheetExists, batchGetRanges, updateRowByPrimaryKey, deleteRowByPrimaryKey } from './sheets';
+import { safeJsonParse, safeResponseJson } from './safeJson';
 
 export type GembaCategory = 
   | 'Sort (1S)' 
@@ -866,7 +867,7 @@ export async function runGembaSmartAssist(params: {
     });
 
     if (res.ok) {
-      const data = await res.json();
+      const data = await safeResponseJson<any>(res, null);
       if (data && data.fiveWhy && data.rootCause) {
         return {
           ...data,
