@@ -1,5 +1,6 @@
 import { Employee } from '../components/kpi/types';
 import { getCompanyName } from './appSettings';
+import { hasNavigatorAccess } from './navigators';
 
 export type AccessLimitType = 'all' | 'supervised' | 'department' | 'selected' | 'self';
 
@@ -37,6 +38,7 @@ export interface ModulePermissionConfig {
 
 export interface UserSecurityScope {
   username: string; // Gmail ID / Login Email
+  email?: string; // Login Email / Gmail ID
   role: string; // 'Admin' | 'Manager' | 'Superuser' | 'Supervisor' | 'User'
   status: string; // 'Active' | 'Inactive'
   accessLevel: string[]; // Allowed navigation modules
@@ -387,9 +389,13 @@ export function calculateEffectiveUserPermissions(
   }
 
   // 1b. Check User Additional Access (Adds additional permissions on top of baseline)
-  if (scope.username) {
+  const userKeys = [scope.username, scope.email]
+    .filter((k): k is string => Boolean(k && k.trim()))
+    .map(k => k.trim().toLowerCase());
+
+  for (const uKey of userKeys) {
     try {
-      const rawAdd = localStorage.getItem(`erp_user_additional_access_${scope.username.toLowerCase()}`);
+      const rawAdd = localStorage.getItem(`erp_user_additional_access_${uKey}`);
       if (rawAdd) {
         const addMap = JSON.parse(rawAdd);
         const cleanMod = moduleKey.toLowerCase().replace(/[^a-z0-9]/g, '_');
@@ -398,7 +404,7 @@ export function calculateEffectiveUserPermissions(
           if (action === 'view' && (addRec.canView || addRec.canEdit)) {
             return { allowed: true, source: 'Additional Access', scope: 'All Data', permissionType: action, moduleKey };
           }
-          if (['edit', 'create', 'delete', 'assign'].includes(action) && addRec.canEdit) {
+          if (['edit', 'create', 'delete', 'assign', 'approve'].includes(action) && addRec.canEdit) {
             return { allowed: true, source: 'Additional Access', scope: 'All Data', permissionType: action, moduleKey };
           }
         }
@@ -406,23 +412,66 @@ export function calculateEffectiveUserPermissions(
     } catch (_) {}
   }
 
-  const roleKey = scope.role || 'User';
-  const roleDefaults = ROLE_DEFAULT_PERMISSIONS[roleKey]?.[moduleKey] || { permissions: [], scope: 'Own Data' };
-
   // 2. Check Explicit Deny
-  if (scope.deniedPermissions && scope.deniedPermissions[moduleKey]?.includes(action)) {
-    return { allowed: false, source: 'Explicit Deny', scope: roleDefaults.scope, permissionType: action, moduleKey };
+  if (scope.deniedPermissions && (scope.deniedPermissions[moduleKey]?.includes(action) || scope.deniedPermissions[moduleKey.toLowerCase()]?.includes(action))) {
+    return { allowed: false, source: 'Explicit Deny', scope: 'Own Data', permissionType: action, moduleKey };
   }
 
-  // 3. Check User Override
+  // 3. Check Settings Navigator Access Control for View Permission
+  const isViewAuthorized = hasNavigatorAccess(moduleKey, scope, scope.accessLevel);
+
+  if (action === 'view') {
+    if (isViewAuthorized) {
+      return { 
+        allowed: true, 
+        source: 'Role Default', 
+        scope: scope.role === 'Manager' ? 'Department' : scope.role === 'Supervisor' ? 'Team' : 'Own Data', 
+        permissionType: action, 
+        moduleKey 
+      };
+    }
+    return { allowed: false, source: 'Role Default', scope: 'Own Data', permissionType: action, moduleKey };
+  }
+
+  // 4. For Modification Actions (edit, create, delete, assign, approve, export, configure):
+  // User MUST have view authorization first!
+  if (!isViewAuthorized) {
+    return { allowed: false, source: 'Role Default', scope: 'Own Data', permissionType: action, moduleKey };
+  }
+
+  // 5. Check User Override
   if (scope.customModulePermissions && scope.customModulePermissions[moduleKey]) {
     const userCustom = scope.customModulePermissions[moduleKey];
     if (userCustom.permissions.includes(action)) {
-      return { allowed: true, source: 'User Override', scope: userCustom.scope || roleDefaults.scope, permissionType: action, moduleKey };
+      return { allowed: true, source: 'User Override', scope: userCustom.scope || 'Own Data', permissionType: action, moduleKey };
     }
   }
 
-  // 4. Role Default
+  // 6. Check Input Permissions (e.g. 'all', or specific module like 'leave', 'tasks', 'kpi')
+  const modClean = moduleKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const hasInputPerm = scope.inputPermissions?.some(p => {
+    const pClean = p.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return pClean === 'all' || pClean === modClean;
+  });
+
+  if (hasInputPerm && ['edit', 'create', 'delete', 'assign'].includes(action)) {
+    return { 
+      allowed: true, 
+      source: 'User Override', 
+      scope: scope.role === 'Manager' ? 'Department' : scope.role === 'Supervisor' ? 'Team' : 'Own Data', 
+      permissionType: action, 
+      moduleKey 
+    };
+  }
+
+  // 7. Manager / Supervisor Elevated Access for their Authorized Modules
+  if (scope.role === 'Manager' && ['edit', 'create', 'approve', 'assign', 'export'].includes(action)) {
+    return { allowed: true, source: 'Role Default', scope: 'Department', permissionType: action, moduleKey };
+  }
+
+  const roleKey = scope.role || 'User';
+  const roleDefaults = ROLE_DEFAULT_PERMISSIONS[roleKey]?.[moduleKey] || { permissions: [], scope: 'Own Data' };
+
   if (roleDefaults.permissions.includes(action)) {
     return { allowed: true, source: 'Role Default', scope: roleDefaults.scope, permissionType: action, moduleKey };
   }

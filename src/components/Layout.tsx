@@ -4,7 +4,7 @@ import {
   Users, Wrench, Calendar, Check, Clock, FileSpreadsheet, 
   Award, DownloadCloud, Settings, Menu, X, LogOut,
   ChevronDown, User as UserIcon, ChevronRight, Mountain, Eye, BarChart, Download, CheckSquare, Target,
-  Shield, Mail, Building, Briefcase, KeyRound, FileCheck2, AlertTriangle, Compass, Sparkles, Search, PartyPopper,
+  Shield, ShieldAlert, Mail, Building, Briefcase, KeyRound, FileCheck2, AlertTriangle, Compass, Sparkles, Search, PartyPopper,
   Palette, UserCheck, Activity, Layers, Bell, ExternalLink, TrendingUp, PanelLeftClose, PanelLeftOpen, Zap
 } from 'lucide-react';
 import { User } from 'firebase/auth';
@@ -51,7 +51,8 @@ import {
   calculateEffectiveUserPermissions,
   canUserPerformAction 
 } from '../lib/security';
-import { resolveUserLandingNavigator, findNavigator } from '../lib/navigators';
+import { resolveUserLandingNavigator, findNavigator, hasNavigatorAccess } from '../lib/navigators';
+import { fetchAllAdditionalAccessFromDatabase } from '../lib/additionalAccess';
 import { resolvePaletteForModule, getActiveThemePreference, applyPaletteToDocument, ColorPalette } from '../lib/colorPalettes';
 import ThemeSegmentSelector from './common/ThemeSegmentSelector';
 import AnimatedSlogan from './common/AnimatedSlogan';
@@ -132,8 +133,28 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
   const [landingNotice, setLandingNotice] = useState<string | null>(null);
   const [hasInitializedLanding, setHasInitializedLanding] = useState(false);
   const [themePreference, setThemePreference] = useState<string>(getActiveThemePreference());
+  const [navigatorsVersion, setNavigatorsVersion] = useState(0);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const bellDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sync additional access from spreadsheet and listen for navigator updates
+  useEffect(() => {
+    if (spreadsheetId) {
+      fetchAllAdditionalAccessFromDatabase(spreadsheetId)
+        .then(() => setNavigatorsVersion(v => v + 1))
+        .catch(() => {});
+    }
+  }, [spreadsheetId]);
+
+  useEffect(() => {
+    const handleNavsUpdated = () => setNavigatorsVersion(v => v + 1);
+    window.addEventListener('erp-navigators-updated', handleNavsUpdated);
+    window.addEventListener('erp-additional-access-updated', handleNavsUpdated);
+    return () => {
+      window.removeEventListener('erp-navigators-updated', handleNavsUpdated);
+      window.removeEventListener('erp-additional-access-updated', handleNavsUpdated);
+    };
+  }, []);
 
   // Close notification dropdown when clicking outside
   useEffect(() => {
@@ -394,8 +415,8 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
 
   const navigation = [
     { id: 'dashboard', name: 'ERP Dashboard', icon: Menu, moduleName: 'All', category: 'Executive & Overview' },
-    { id: 'tasks', name: 'Daily Tasks', icon: CheckSquare, moduleName: 'All', category: 'Executive & Overview' },
-    { id: 'gemba-walks', name: 'Gemba Walks', icon: Eye, moduleName: 'All', category: 'Executive & Overview' },
+    { id: 'tasks', name: 'Daily Tasks', icon: CheckSquare, moduleName: 'Daily Tasks', category: 'Executive & Overview' },
+    { id: 'gemba-walks', name: 'Gemba Walks', icon: Eye, moduleName: 'Gemba Walks', category: 'Executive & Overview' },
     { id: '5s-management', name: '5S & Visual Mgmt', icon: Sparkles, moduleName: '5S & Visual Management', category: 'Executive & Overview' },
 
     { id: 'breakdown', name: 'Breakdown Log', icon: AlertTriangle, moduleName: 'Machine & Skills', category: 'Operations & Factory' },
@@ -417,31 +438,19 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
     { id: 'contact-portfolio', name: 'Developer Contact', icon: UserIcon, moduleName: 'All', category: 'System & Organization' },
   ];
 
-  const hasAccess = (moduleName: string) => {
-    if (userSecurityScope?.isAdmin) return true;
-    
-    // Check if user has explicit permission for module
-    if (userSecurityScope) {
-      const modId = moduleName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      if (canUserPerformAction(userSecurityScope, modId, 'view')) return true;
-      if (moduleName === 'KPI Performance' && (canUserPerformAction(userSecurityScope, 'kpi', 'view') || canUserPerformAction(userSecurityScope, 'kpi_performance', 'view') || canUserPerformAction(userSecurityScope, 'monthly_kpi', 'view'))) return true;
-    }
-
-    if (accessLevels.includes('All')) return true;
-    if (accessLevels.includes(moduleName)) return true;
-    if (moduleName === 'KPI Performance' && (accessLevels.includes('Monthly KPI') || accessLevels.includes('KPI Performance') || accessLevels.includes('KPI'))) return true;
-    return false;
+  const hasAccess = (navIdOrModuleName: string) => {
+    return hasNavigatorAccess(navIdOrModuleName, userSecurityScope, accessLevels);
   };
 
   const filteredNavigation = useMemo(() => {
     return navigation
-      .filter(item => hasAccess(item.moduleName))
+      .filter(item => hasAccess(item.id))
       .filter(item => {
         if (!sidebarSearch.trim()) return true;
         const q = sidebarSearch.toLowerCase();
         return item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q);
       });
-  }, [accessLevels, userSecurityScope, sidebarSearch]);
+  }, [accessLevels, userSecurityScope, sidebarSearch, navigatorsVersion]);
 
   const navigationSections = useMemo(() => {
     const order = [
@@ -462,12 +471,57 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
   }, [filteredNavigation]);
 
   useEffect(() => {
-    if (filteredNavigation.length > 0 && !hasAccess(navigation.find(n => n.id === activeModule)?.moduleName || '')) {
+    if (filteredNavigation.length > 0 && !hasAccess(activeModule)) {
       setActiveModule(filteredNavigation[0].id as ModuleType);
     }
-  }, [accessLevels, activeModule]);
+  }, [accessLevels, activeModule, userSecurityScope, navigatorsVersion]);
 
   const renderModule = () => {
+    if (!hasAccess(activeModule)) {
+      const currentNavObj = navigation.find(n => n.id === activeModule);
+      const navTitle = currentNavObj?.name || activeModule;
+      const firstAuthorized = filteredNavigation[0] || { id: 'dashboard', name: 'ERP Dashboard' };
+
+      return (
+        <div id="navigator-access-restricted" className="min-h-[65vh] flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white rounded-2xl border border-gray-200/90 shadow-sm p-6 sm:p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-center justify-center mx-auto mb-4 text-amber-600">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight mb-2">
+              Access Restricted
+            </h2>
+            <p className="text-sm text-gray-600 mb-5 leading-relaxed">
+              Your account <span className="font-semibold text-gray-800">({userSecurityScope?.username || user.email})</span> does not have authorization to view the <span className="font-semibold text-gray-900">{navTitle}</span> navigator according to current settings and access controls.
+            </p>
+
+            <div className="bg-gray-50 border border-gray-200/70 rounded-xl p-3.5 mb-6 text-left text-xs text-gray-600 space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Current Role:</span>
+                <span className="font-bold text-gray-800">{userSecurityScope?.role || 'Standard User'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Department:</span>
+                <span className="font-medium text-gray-800">{userSecurityScope?.assignedDepartment || 'All Departments'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Navigator Status:</span>
+                <span className="font-medium text-amber-700">Restricted / Unauthorized</span>
+              </div>
+            </div>
+
+            <button
+              id="btn-return-authorized-nav"
+              onClick={() => setActiveModule(firstAuthorized.id as ModuleType)}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gray-900 text-white font-medium text-sm hover:bg-gray-800 transition-colors shadow-sm cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+              Go to Authorized Workspace ({firstAuthorized.name})
+            </button>
+          </div>
+        </div>
+      );
+    }
     switch (activeModule) {
       case 'skill-dashboard': return <SkillMatrixDashboard spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} />;
       case 'dashboard': return <Dashboard spreadsheetId={spreadsheetId} user={user} accessLevels={accessLevels} userSecurityScope={userSecurityScope} onNavigate={(tab) => setActiveModule(tab as any)} />;

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
+import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 
 let aiClient: GoogleGenAI | null = null;
@@ -63,9 +63,9 @@ async function startServer() {
 
   app.use(express.json({ limit: "15mb" }));
 
-  // Health check endpoint for Cloud Run / load balancers
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  // Health check endpoints for Cloud Run / load balancers
+  app.get(["/api/health", "/health", "/_ah/health", "/ping"], (req, res) => {
+    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   // AI Smart 5-Why & Risk Analysis Assistant for Gemba Walk
@@ -254,23 +254,50 @@ Return a strictly valid JSON response with this structure:
   });
 
   // Vite middleware for development / static serving for production
-  if (process.env.NODE_ENV !== "production") {
+  const isProduction =
+    process.env.NODE_ENV === "production" ||
+    Boolean(process.env.K_SERVICE) ||
+    process.env.npm_lifecycle_event === "start" ||
+    (!process.env.npm_lifecycle_event && fs.existsSync(path.join(process.cwd(), "dist", "index.html")));
+
+  if (!isProduction) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    const distPath = fs.existsSync(path.join(process.cwd(), "dist", "index.html"))
+      ? path.join(process.cwd(), "dist")
+      : process.cwd();
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const indexPath = path.join(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(200).send("Application is starting up...");
+      }
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+  });
+
+  server.on("error", (err: any) => {
+    console.error("Server listener error:", err);
+  });
+
+  process.on("SIGTERM", () => {
+    server.close(() => {
+      process.exit(0);
+    });
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});

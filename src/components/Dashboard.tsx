@@ -38,6 +38,7 @@ import DepartmentMatrix from './dashboard/DepartmentMatrix';
 import ModuleBreakdowns from './dashboard/ModuleBreakdowns';
 import RecentActivity from './dashboard/RecentActivity';
 import QuickActions from './dashboard/QuickActions';
+import { hasNavigatorAccess } from '../lib/navigators';
 import { 
   DashboardDateFilter, DashboardExecutiveTab, DateRange, NavigatorHealthMetric, 
   DashboardAlertItem, DepartmentMetric, RecentActivityItem, OperationalVitalSign 
@@ -1049,7 +1050,7 @@ export default function Dashboard({
 
           {/* Navigator-by-Navigator Health Scores & Workload Chart */}
           <NavigatorOverview
-            navigatorMetrics={navigatorMetrics}
+            navigatorMetrics={navigatorMetrics.filter(m => hasNavigatorAccess(m.id, userSecurityScope, accessLevels))}
             onNavigate={onNavigate}
           />
 
@@ -1062,6 +1063,7 @@ export default function Dashboard({
           {/* Quick Navigation & Creation Shortcuts */}
           <QuickActions
             userSecurityScope={userSecurityScope}
+            accessLevels={accessLevels}
             onNavigate={onNavigate}
           />
 

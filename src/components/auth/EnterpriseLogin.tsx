@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Shield, Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2, 
   Loader2, ArrowRight, HelpCircle, KeyRound, Building2, User, 
-  ExternalLink, Sparkles, RefreshCw
+  ExternalLink, Sparkles, RefreshCw, Copy, Check
 } from 'lucide-react';
 import { getCompanyName, getErpName } from '../../lib/appSettings';
 
@@ -14,6 +14,8 @@ interface EnterpriseLoginProps {
   loadingStepText?: string;
   isPopupBlocked?: boolean;
   onClearPopupBlocked?: () => void;
+  unauthorizedDomain?: string | null;
+  onClearUnauthorizedDomain?: () => void;
   errorMessage?: string | null;
   onClearError?: () => void;
 }
@@ -26,6 +28,8 @@ export default function EnterpriseLogin({
   loadingStepText = 'Signing you in...',
   isPopupBlocked = false,
   onClearPopupBlocked,
+  unauthorizedDomain,
+  onClearUnauthorizedDomain,
   errorMessage,
   onClearError
 }: EnterpriseLoginProps) {
@@ -34,6 +38,7 @@ export default function EnterpriseLogin({
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isCapsLockOn, setIsCapsLockOn] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   
   // Forgot password modal
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -53,6 +58,9 @@ export default function EnterpriseLogin({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim() || !password) return;
+    if (password.length < 6) {
+      return;
+    }
     if (onClearError) onClearError();
     await onEmailPasswordLogin(identifier.trim(), password, rememberMe);
   };
@@ -154,6 +162,71 @@ export default function EnterpriseLogin({
               </div>
             )}
 
+            {/* Firebase Unauthorized Domain Helper */}
+            {unauthorizedDomain && (
+              <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-950 space-y-2.5 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs text-indigo-900">
+                    <Shield className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>Authorize Domain in Firebase</span>
+                  </div>
+                  {onClearUnauthorizedDomain && (
+                    <button
+                      type="button"
+                      onClick={onClearUnauthorizedDomain}
+                      className="text-xs text-indigo-400 hover:text-indigo-700 font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-indigo-800 leading-relaxed">
+                  Firebase Authentication requires your current app domain to be added to Authorized Domains before Google Sign-In can proceed:
+                </p>
+                <div className="flex items-center gap-2 p-2 bg-white rounded-xl border border-indigo-200 font-mono text-[11px] text-indigo-900 select-all">
+                  <span className="flex-1 truncate">{unauthorizedDomain}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(unauthorizedDomain);
+                      setCopiedDomain(true);
+                      setTimeout(() => setCopiedDomain(false), 2000);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded-lg text-[10px] font-bold shrink-0 transition"
+                  >
+                    {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedDomain ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+                <div className="text-[11px] text-indigo-800 space-y-1 bg-white/70 p-2.5 rounded-xl border border-indigo-100">
+                  <p className="font-bold text-[10px] text-indigo-900 uppercase tracking-wider">How to add in 10 seconds:</p>
+                  <ol className="list-decimal list-inside space-y-0.5 text-[10px] text-indigo-700">
+                    <li>Go to Firebase Console &gt; Authentication &gt; Settings &gt; Authorized domains</li>
+                    <li>Click <strong>&ldquo;Add domain&rdquo;</strong> and paste the domain above</li>
+                  </ol>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <a
+                    href="https://console.firebase.google.com/project/enterprise-erp-8a176/authentication/settings"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs"
+                  >
+                    Open Firebase Settings <ExternalLink className="w-3 h-3" />
+                  </a>
+                  {onClearUnauthorizedDomain && (
+                    <button
+                      type="button"
+                      onClick={onClearUnauthorizedDomain}
+                      className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl text-xs font-medium"
+                    >
+                      Use Email &amp; Password
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Standard Email / Employee ID Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               
@@ -199,12 +272,13 @@ export default function EnterpriseLogin({
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
+                    minLength={6}
                     disabled={isLoading}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleKeyActivity}
                     onKeyUp={handleKeyActivity}
-                    placeholder="Enter your password"
+                    placeholder="Enter password (min 6 characters)"
                     className="block w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition disabled:opacity-60"
                   />
                   <button
@@ -216,6 +290,13 @@ export default function EnterpriseLogin({
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+
+                {/* Password length helper */}
+                {password.length > 0 && password.length < 6 && (
+                  <p className="mt-1.5 text-[11px] font-semibold text-amber-600 animate-in fade-in">
+                    Password must be at least 6 characters (Firebase Authentication requirement).
+                  </p>
+                )}
 
                 {/* Caps Lock Indicator */}
                 {isCapsLockOn && (

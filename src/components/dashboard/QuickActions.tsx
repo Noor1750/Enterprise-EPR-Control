@@ -6,13 +6,15 @@ import {
 } from 'lucide-react';
 import { UserSecurityScope } from '../../lib/security';
 import { resolvePaletteForModule } from '../../lib/colorPalettes';
+import { hasNavigatorAccess } from '../../lib/navigators';
 
 interface QuickActionsProps {
   userSecurityScope?: UserSecurityScope;
+  accessLevels?: string[];
   onNavigate?: (tab: string) => void;
 }
 
-export default function QuickActions({ userSecurityScope, onNavigate }: QuickActionsProps) {
+export default function QuickActions({ userSecurityScope, accessLevels = [], onNavigate }: QuickActionsProps) {
   const isAdminOrManager = userSecurityScope?.isAdmin || userSecurityScope?.isSupervisor || userSecurityScope?.role === 'Manager';
 
   const actions = [
@@ -69,6 +71,8 @@ export default function QuickActions({ userSecurityScope, onNavigate }: QuickAct
     ] : [])
   ];
 
+  const authorizedActions = actions.filter(a => hasNavigatorAccess(a.targetTab, userSecurityScope, accessLevels));
+
   return (
     <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-5 md:p-6 mb-6">
       <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
@@ -81,7 +85,7 @@ export default function QuickActions({ userSecurityScope, onNavigate }: QuickAct
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2.5">
-        {actions.map((action, index) => {
+        {authorizedActions.map((action, index) => {
           const Icon = action.icon;
           const pal = resolvePaletteForModule(action.targetTab);
           return (

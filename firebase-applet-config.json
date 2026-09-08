@@ -1,11 +1,10 @@
 {
-  "projectId": "boreal-summit-qt8c4",
-  "appId": "1:1070333981032:web:1ffd38dc0b536bc92a26dd",
-  "apiKey": "AIzaSyDrSKZTdRG80aurmH4GyARME4KqqeBXgi8",
-  "authDomain": "boreal-summit-qt8c4.firebaseapp.com",
-  "storageBucket": "boreal-summit-qt8c4.firebasestorage.app",
-  "messagingSenderId": "1070333981032",
+  "projectId": "enterprise-erp-8a176",
+  "appId": "1:170156314374:web:97331195bf044089399887",
+  "apiKey": "AIzaSyDoM_pgx0UsLfKQv9JTk-SBGf0uIbskYmI",
+  "authDomain": "enterprise-erp-8a176.firebaseapp.com",
+  "storageBucket": "enterprise-erp-8a176.firebasestorage.app",
+  "messagingSenderId": "170156314374",
   "measurementId": "",
-  "oAuthClientId": "1070333981032-atqld51vfvogplln1d9igd0dennchgsq.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

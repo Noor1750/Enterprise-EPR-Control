@@ -1,0 +1,163 @@
+{
+  "entities": {
+    "user": {
+      "title": "User Profile",
+      "description": "Enterprise employee user profile and security roles",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["Admin", "Manager", "Supervisor", "User"],
+          "description": "System role"
+        },
+        "employeeName": {
+          "type": "string",
+          "description": "Full name of the employee"
+        },
+        "employeeId": {
+          "type": "string",
+          "description": "Unique Employee ID"
+        },
+        "department": {
+          "type": "string",
+          "description": "Assigned Department"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Active", "Inactive"],
+          "description": "Account status"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp ISO string"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated timestamp ISO string"
+        }
+      },
+      "required": ["email", "role", "employeeName", "status"]
+    },
+    "admin": {
+      "title": "System Admin",
+      "description": "Trusted administrative record for RBAC lookup",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Admin email"
+        },
+        "role": {
+          "type": "string",
+          "description": "Role descriptor"
+        },
+        "assignedAt": {
+          "type": "string",
+          "description": "Timestamp when admin role was granted"
+        }
+      },
+      "required": ["email", "role"]
+    },
+    "erpTask": {
+      "title": "ERP Task",
+      "description": "Operational task assigned to department or user",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Task identifier"
+        },
+        "title": {
+          "type": "string",
+          "description": "Task title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Task details"
+        },
+        "assignedTo": {
+          "type": "string",
+          "description": "Assigned user or employee ID"
+        },
+        "department": {
+          "type": "string",
+          "description": "Department"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Pending", "In Progress", "Completed", "Cancelled"],
+          "description": "Task status"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["Critical", "High", "Medium", "Low"],
+          "description": "Priority level"
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "Target completion date"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Created timestamp"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "User ID or email of creator"
+        }
+      },
+      "required": ["title", "department", "status", "priority", "createdBy"]
+    },
+    "auditLog": {
+      "title": "Audit Activity Log",
+      "description": "Security and assistant action audit logs",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Log identifier"
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "User email"
+        },
+        "action": {
+          "type": "string",
+          "description": "Action performed"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp"
+        },
+        "details": {
+          "type": "string",
+          "description": "Additional context details"
+        }
+      },
+      "required": ["userEmail", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User profile records indexed by auth UID"
+    },
+    "/admins/{userId}": {
+      "schema": "admin",
+      "description": "Trusted administrative users lookup for RBAC"
+    },
+    "/tasks/{taskId}": {
+      "schema": "erpTask",
+      "description": "Enterprise daily tasks collection"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "auditLog",
+      "description": "System and security audit records"
+    }
+  }
+}

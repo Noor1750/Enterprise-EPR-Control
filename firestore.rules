@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'noor.alam1750@gmail.com' ||
+        request.auth.token.email == 'smltrimsbd@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Admins Collection
+    match /admins/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && (
+        !('role' in incoming()) || incoming().role == 'User' || isSuperAdmin()
+      );
+      allow update: if isSignedIn() && (
+        isSuperAdmin() || (
+          request.auth.uid == userId &&
+          !incoming().diff(existing()).affectedKeys().hasAny(['role', 'isAdmin'])
+        )
+      );
+      allow delete: if isSuperAdmin();
+    }
+
+    // Operational Tasks
+    match /tasks/{taskId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().createdBy is string;
+      allow update: if isSignedIn() && (
+        isSuperAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+      );
+      allow delete: if isSuperAdmin() || (isSignedIn() && resource.data.createdBy == request.auth.uid);
+    }
+
+    // Audit Logs
+    match /auditLogs/{logId} {
+      allow get: if isSuperAdmin();
+      allow list: if isSuperAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isSuperAdmin();
+    }
+  }
+}

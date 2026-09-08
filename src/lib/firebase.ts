@@ -21,13 +21,14 @@ import {
 } from 'firebase/auth';
 import fallbackConfig from '../../firebase-applet-config.json';
 
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || fallbackConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || fallbackConfig.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || fallbackConfig.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || fallbackConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || fallbackConfig.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || fallbackConfig.appId
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || fallbackConfig.apiKey || "AIzaSyDoM_pgx0UsLfKQv9JTk-SBGf0uIbskYmI",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || fallbackConfig.authDomain || "enterprise-erp-8a176.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || fallbackConfig.projectId || "enterprise-erp-8a176",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || fallbackConfig.storageBucket || "enterprise-erp-8a176.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || fallbackConfig.messagingSenderId || "170156314374",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || fallbackConfig.appId || "1:170156314374:web:97331195bf044089399887"
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -170,7 +171,11 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
         console.warn('Sign in popup was blocked by the browser. Please allow popups or open in a new tab.');
         throw error;
       }
-      console.error('Google Sign in error:', error);
+      if (error?.code === 'auth/unauthorized-domain') {
+        console.warn(`Firebase Auth unauthorized domain: ${window.location.hostname}. Please add this domain to Firebase Console > Authentication > Settings > Authorized domains.`);
+        throw error;
+      }
+      console.warn('Google Sign in attempt:', error?.code || error?.message || error);
       throw error;
     } finally {
       activeGoogleSignInPromise = null;
@@ -201,7 +206,7 @@ export const emailPasswordSignIn = async (
     cachedAccessToken = token;
     return { user: userCredential.user, token };
   } catch (error: any) {
-    console.error('Email/Password sign in error:', error);
+    console.warn('Email/Password sign in attempt:', error?.code || error?.message || error);
     throw error;
   }
 };
@@ -213,13 +218,18 @@ export const registerUserAccount = async (
   email: string, 
   password: string
 ): Promise<{ user: User; token: string }> => {
+  if (!password || password.length < 6) {
+    const err: any = new Error('Password should be at least 6 characters (auth/weak-password)');
+    err.code = 'auth/weak-password';
+    throw err;
+  }
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
     const token = await userCredential.user.getIdToken();
     cachedAccessToken = token;
     return { user: userCredential.user, token };
   } catch (error: any) {
-    console.error('User registration error:', error);
+    console.warn('User registration validation:', error?.code || error?.message || error);
     throw error;
   }
 };

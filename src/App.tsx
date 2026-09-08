@@ -25,6 +25,7 @@ import {
   enrichUserWithEmployeeData,
   recordSecurityAuditLog 
 } from './lib/security';
+import { fetchAllAdditionalAccessFromDatabase } from './lib/additionalAccess';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -33,6 +34,7 @@ export default function App() {
   const [loadingStepText, setLoadingStepText] = useState('Signing you in...');
   const [loginErrorMsg, setLoginErrorMsg] = useState<string | null>(null);
   const [isPopupBlocked, setIsPopupBlocked] = useState(false);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
 
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(
     localStorage.getItem('erp_spreadsheet_id') || import.meta.env.VITE_SPREADSHEET_ID || 'local-storage-db'
@@ -102,7 +104,8 @@ export default function App() {
       try {
         const [usersDataRaw, empDataRaw] = await Promise.all([
           getRange(spreadsheetId || 'local-storage-db', 'Users!A:Z').catch(() => []),
-          getRange(spreadsheetId || 'local-storage-db', 'Employees!A:Z').catch(() => [])
+          getRange(spreadsheetId || 'local-storage-db', 'Employees!A:Z').catch(() => []),
+          fetchAllAdditionalAccessFromDatabase(spreadsheetId || 'local-storage-db').catch(() => ({}))
         ]);
 
         const usersData = usersDataRaw.length > 1 ? usersDataRaw.slice(1) : [];
@@ -185,6 +188,14 @@ export default function App() {
         // 4. Parse & Enrich Security Scope
         let parsedScope = parseUserSecurityScope(foundUserRow, user.email || '');
         parsedScope = enrichUserWithEmployeeData(parsedScope, employeesData);
+
+        if (!parsedScope.defaultNavigator) {
+          const savedDefault = localStorage.getItem(`erp_user_default_nav_${userEmailLower}`) ||
+            (parsedScope.username ? localStorage.getItem(`erp_user_default_nav_${parsedScope.username.toLowerCase()}`) : null);
+          if (savedDefault) {
+            parsedScope.defaultNavigator = savedDefault;
+          }
+        }
 
         // 5. Check if user access is incomplete (missing role)
         if (!parsedScope.role) {
@@ -300,18 +311,28 @@ export default function App() {
 
         // Check if user is an authorized admin or registered local user that needs initial Firebase provisioning
         const isSuperAdmin = SUPER_ADMIN_EMAILS.some(e => e.toLowerCase() === targetEmail);
-        const isDefaultPassword = password === 'Samia@628';
 
-        if ((errCode === 'auth/user-not-found' || errCode === 'auth/invalid-credential') && isSuperAdmin && isDefaultPassword) {
-          // Initialize Firebase user account for Super Admin on the fly
-          try {
-            const registered = await registerUserAccount(targetEmail, password);
-            setUser(registered.user);
-            setToken(registered.token);
-            setAccessToken(registered.token);
+        if ((errCode === 'auth/user-not-found' || errCode === 'auth/invalid-credential') && isSuperAdmin) {
+          if (password && password.length >= 6) {
+            // Initialize Firebase user account for Super Admin on the fly
+            try {
+              const registered = await registerUserAccount(targetEmail, password);
+              setUser(registered.user);
+              setToken(registered.token);
+              setAccessToken(registered.token);
+              return;
+            } catch (regErr: any) {
+              if (regErr?.code === 'auth/email-already-in-use') {
+                setLoginErrorMsg('Invalid password for this administrator account. Please verify your password or use Forgot Password.');
+                setIsLoading(false);
+                return;
+              }
+              console.warn('Initial admin provisioning note:', regErr?.code || regErr?.message);
+            }
+          } else {
+            setLoginErrorMsg('Password should be at least 6 characters (Firebase Authentication requirement).');
+            setIsLoading(false);
             return;
-          } catch (regErr) {
-            console.warn('Initial admin provisioning failed, falling back to database auth:', regErr);
           }
         }
 
@@ -329,32 +350,36 @@ export default function App() {
             }
 
             // Sync user to Firebase Auth so next time standard Firebase verification succeeds
-            try {
-              const registered = await registerUserAccount(targetEmail, password);
-              setUser(registered.user);
-              setToken(registered.token);
-              setAccessToken(registered.token);
-              return;
-            } catch (_) {
-              // Create mock Firebase-like authenticated session
-              const mockUser = {
-                uid: 'user-' + Date.now(),
-                email: targetEmail,
-                displayName: foundDbUser[10] || targetEmail.split('@')[0],
-                emailVerified: true
-              } as any;
-              setUser(mockUser);
-              const realToken = localStorage.getItem('erp_real_google_token') || 'auth-token-' + Date.now();
-              setToken(realToken);
-              setAccessToken(realToken);
-              return;
+            if (password && password.length >= 6) {
+              try {
+                const registered = await registerUserAccount(targetEmail, password);
+                setUser(registered.user);
+                setToken(registered.token);
+                setAccessToken(registered.token);
+                return;
+              } catch (_) {}
             }
+
+            // Create mock Firebase-like authenticated session
+            const mockUser = {
+              uid: 'user-' + Date.now(),
+              email: targetEmail,
+              displayName: foundDbUser[10] || targetEmail.split('@')[0],
+              emailVerified: true
+            } as any;
+            setUser(mockUser);
+            const realToken = localStorage.getItem('erp_real_google_token') || 'auth-token-' + Date.now();
+            setToken(realToken);
+            setAccessToken(realToken);
+            return;
           }
         } catch (_) {}
 
         // Map Firebase error codes to friendly messages
         if (errCode === 'auth/invalid-credential' || errCode === 'auth/wrong-password' || errCode === 'auth/user-not-found') {
-          setLoginErrorMsg('Email/Employee ID or password is incorrect.');
+          setLoginErrorMsg('Invalid email/Employee ID or password. Please verify your credentials or use Forgot Password.');
+        } else if (errCode === 'auth/weak-password') {
+          setLoginErrorMsg('Password should be at least 6 characters (Firebase Authentication requirement).');
         } else if (errCode === 'auth/too-many-requests') {
           setLoginErrorMsg('Too many unsuccessful login attempts. Please wait a moment or reset your password.');
         } else if (errCode === 'auth/network-request-failed') {
@@ -365,7 +390,7 @@ export default function App() {
         setIsLoading(false);
       }
     } catch (err: any) {
-      console.error('Login process error:', err);
+      console.warn('Login process notice:', err?.code || err?.message || err);
       setLoginErrorMsg('An unexpected error occurred during login. Please try again.');
       setIsLoading(false);
     }
@@ -377,6 +402,7 @@ export default function App() {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setIsPopupBlocked(false);
+    setUnauthorizedDomain(null);
     setLoginErrorMsg(null);
     setLoadingStepText('Connecting to Google...');
 
@@ -400,8 +426,15 @@ export default function App() {
       } else if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/network-request-failed') {
         setIsPopupBlocked(true);
         setIsLoading(false);
+      } else if (err?.code === 'auth/unauthorized-domain') {
+        setIsLoading(false);
+        const currentDomain = window.location.hostname;
+        setUnauthorizedDomain(currentDomain);
+        setLoginErrorMsg(
+          `Domain "${currentDomain}" is not yet in Firebase's Authorized Domains list. Please see the instructions above or log in with Email & Password.`
+        );
       } else {
-        console.error('Google login failed:', err);
+        console.warn('Google login issue:', err?.code || err?.message || err);
         setLoginErrorMsg('Google authentication failed. Please try again.');
         setIsLoading(false);
       }
@@ -524,6 +557,8 @@ export default function App() {
         loadingStepText={loadingStepText}
         isPopupBlocked={isPopupBlocked}
         onClearPopupBlocked={() => setIsPopupBlocked(false)}
+        unauthorizedDomain={unauthorizedDomain}
+        onClearUnauthorizedDomain={() => setUnauthorizedDomain(null)}
         errorMessage={loginErrorMsg}
         onClearError={() => setLoginErrorMsg(null)}
       />

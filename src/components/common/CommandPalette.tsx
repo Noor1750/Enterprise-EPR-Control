@@ -12,6 +12,7 @@ import {
 import { EmployeeShiftState, ShiftType, getShiftBadgeStyles, getShiftModeBadgeStyles } from '../../lib/shiftEngine';
 import { UserSecurityScope, canUserPerformAction } from '../../lib/security';
 import { resolvePaletteForModule, ColorPalette } from '../../lib/colorPalettes';
+import { hasNavigatorAccess } from '../../lib/navigators';
 import ShiftBadge from './ShiftBadge';
 import { useEmployeeCrossModuleHub, EmployeeFullAggregatedData } from '../../lib/employeeDataHub';
 
@@ -410,31 +411,19 @@ export default function CommandPalette({
     }
   }, [isOpen]);
 
-  // Check user module permissions
-  const isModuleAccessible = (moduleName: string) => {
-    if (userSecurityScope?.isAdmin) return true;
-    if (userSecurityScope) {
-      const modId = moduleName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      if (canUserPerformAction(userSecurityScope, modId, 'view')) return true;
-      if (moduleName === 'KPI Performance' && (canUserPerformAction(userSecurityScope, 'kpi', 'view') || canUserPerformAction(userSecurityScope, 'kpi_performance', 'view') || canUserPerformAction(userSecurityScope, 'monthly_kpi', 'view'))) return true;
-    }
-    if (accessLevels.includes('All')) return true;
-    if (accessLevels.includes(moduleName)) return true;
-    if (moduleName === 'KPI Performance' && (accessLevels.includes('Monthly KPI') || accessLevels.includes('KPI Performance') || accessLevels.includes('KPI'))) return true;
-    return false;
+  // Check user navigator permissions according to settings access control
+  const isNavAccessible = (navId: string) => {
+    return hasNavigatorAccess(navId, userSecurityScope, accessLevels);
   };
 
   // Filter accessible modules
   const accessibleNavItems = useMemo(() => {
-    return SYSTEM_NAVIGATION_ITEMS.filter(item => isModuleAccessible(item.moduleName));
+    return SYSTEM_NAVIGATION_ITEMS.filter(item => isNavAccessible(item.id));
   }, [accessLevels, userSecurityScope]);
 
   // Filter accessible quick actions
   const accessibleQuickActions = useMemo(() => {
-    return QUICK_ACTIONS.filter(item => {
-      const navItem = SYSTEM_NAVIGATION_ITEMS.find(n => n.id === item.targetModule);
-      return navItem ? isModuleAccessible(navItem.moduleName) : true;
-    });
+    return QUICK_ACTIONS.filter(item => isNavAccessible(item.targetModule));
   }, [accessLevels, userSecurityScope]);
 
   // Search Results Computation

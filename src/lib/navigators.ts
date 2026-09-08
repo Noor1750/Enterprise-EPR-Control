@@ -3,7 +3,7 @@ import {
   Calendar, Clock, Award, Briefcase, DownloadCloud, Settings, Sparkles, Eye, LucideIcon,
   TrendingUp, FileCheck2, HardDrive, ShieldCheck, UserCheck, PartyPopper, User
 } from 'lucide-react';
-import { UserSecurityScope } from './security';
+import type { UserSecurityScope } from './security';
 
 export interface SystemNavigator {
   id: string;
@@ -28,7 +28,7 @@ export const DEFAULT_SYSTEM_NAVIGATORS: SystemNavigator[] = [
   {
     id: 'tasks',
     name: 'Daily Tasks Navigator',
-    moduleName: 'All',
+    moduleName: 'Daily Tasks',
     description: 'Daily Task Dispatching, Priorities, Checklist Management & Job Orders',
     category: 'Operations',
     iconName: 'CheckSquare',
@@ -37,7 +37,7 @@ export const DEFAULT_SYSTEM_NAVIGATORS: SystemNavigator[] = [
   {
     id: 'gemba-walks',
     name: 'Gemba Walks Navigator',
-    moduleName: 'All',
+    moduleName: 'Gemba Walks',
     description: '13-Point Smart Floor Audits, 5-Why Root Cause, Before & After Photos & Action Tracking',
     category: 'Operations',
     iconName: 'Eye',
@@ -270,47 +270,183 @@ export function getSystemNavigators(): SystemNavigator[] {
 export function saveSystemNavigators(navigators: SystemNavigator[]) {
   try {
     localStorage.setItem('erp_system_navigators', JSON.stringify(navigators));
+    window.dispatchEvent(new CustomEvent('erp-navigators-updated', { detail: { navigators } }));
   } catch (err) {
     console.error('Error saving system navigators:', err);
   }
 }
 
-// Check if a user has access permission for a given navigator
+// Check if a user has access permission for a given navigator as per settings access control
 export function hasNavigatorAccess(
   navigatorIdOrObj: string | SystemNavigator,
   userScope?: UserSecurityScope | null,
   accessLevels: string[] = []
 ): boolean {
-  if (userScope?.isAdmin || accessLevels.includes('All')) {
+  const allNavigators = getSystemNavigators();
+  const navId = typeof navigatorIdOrObj === 'string'
+    ? navigatorIdOrObj.trim().toLowerCase()
+    : navigatorIdOrObj.id.toLowerCase();
+
+  const navigator = typeof navigatorIdOrObj === 'object'
+    ? navigatorIdOrObj
+    : allNavigators.find(n => 
+        n.id.toLowerCase() === navId || 
+        n.name.toLowerCase() === navId ||
+        n.name.toLowerCase().replace(' navigator', '') === navId.replace(' navigator', '')
+      ) || DEFAULT_SYSTEM_NAVIGATORS.find(n => 
+        n.id.toLowerCase() === navId || 
+        n.name.toLowerCase() === navId
+      );
+
+  if (!navigator) {
+    if (navId === 'settings' && userScope?.isAdmin) return true;
+    return false;
+  }
+
+  // Find latest system status for this navigator from master
+  const systemNav = allNavigators.find(n => n.id.toLowerCase() === navigator.id.toLowerCase()) || navigator;
+
+  // 1. INACTIVE STATUS CHECK:
+  // If the navigator is marked 'Inactive' in Settings > Navigator Settings & Default Assignment:
+  // Only Administrators can access it. Non-admins are strictly blocked.
+  if (systemNav.status === 'Inactive' && !userScope?.isAdmin) {
+    return false;
+  }
+
+  // 2. ADMIN FULL ACCESS:
+  if (userScope?.isAdmin) {
     return true;
   }
 
-  const navigator = typeof navigatorIdOrObj === 'string'
-    ? (DEFAULT_SYSTEM_NAVIGATORS.find(n => n.id === navigatorIdOrObj || n.name.toLowerCase() === navigatorIdOrObj.toLowerCase()) ||
-       getSystemNavigators().find(n => n.id === navigatorIdOrObj || n.name.toLowerCase() === navigatorIdOrObj.toLowerCase()))
-    : navigatorIdOrObj;
+  // 3. EXPLICIT DENIAL:
+  if (userScope?.deniedPermissions) {
+    const deniedNav = userScope.deniedPermissions[navigator.id.toLowerCase()];
+    const deniedMod = userScope.deniedPermissions[navigator.moduleName.toLowerCase()];
+    if (deniedNav?.includes('view') || deniedMod?.includes('view')) {
+      return false;
+    }
+  }
 
-  if (!navigator) return false;
+  // 4. ADDITIONAL ACCESS CONTROLS (Settings > Additional Access Controls):
+  const userKeys = [userScope?.username, userScope?.email]
+    .filter((k): k is string => Boolean(k && k.trim()))
+    .map(k => k.trim().toLowerCase());
 
-  if (navigator.moduleName === 'All') return true;
-  if (accessLevels.includes(navigator.moduleName)) return true;
-
-  // Check user additional access layer
-  if (userScope?.username) {
+  for (const uKey of userKeys) {
     try {
-      const rawAdd = localStorage.getItem(`erp_user_additional_access_${userScope.username.toLowerCase()}`);
+      const rawAdd = localStorage.getItem(`erp_user_additional_access_${uKey}`);
       if (rawAdd) {
         const addMap = JSON.parse(rawAdd);
-        const navId = navigator.id.toLowerCase();
-        const addRec = addMap[navId] || Object.values(addMap).find((r: any) => r.navigatorId?.toLowerCase() === navId);
-        if (addRec && addRec.status !== 'Inactive' && (addRec.canView || addRec.canEdit)) {
-          return true;
+        const navKey = navigator.id.toLowerCase();
+        const addRec = addMap[navKey] || 
+          addMap[navigator.moduleName.toLowerCase()] ||
+          Object.values(addMap).find((r: any) => 
+            r.navigatorId?.toLowerCase() === navKey || 
+            r.navigatorName?.toLowerCase() === navigator.name.toLowerCase()
+          );
+        
+        if (addRec) {
+          if (addRec.status !== 'Inactive' && (addRec.canView || addRec.canEdit)) {
+            return true;
+          }
         }
       }
     } catch (_) {}
   }
 
-  return false;
+  // 5. USER CUSTOM MODULE OVERRIDE:
+  if (userScope?.customModulePermissions) {
+    const navKey = navigator.id.toLowerCase();
+    if (userScope.customModulePermissions[navKey]?.permissions?.includes('view')) {
+      return true;
+    }
+  }
+
+  // 6. RESOLVE EFFECTIVE ACCESS LEVELS:
+  // Merge accessLevels parameter with userScope.accessLevel
+  const effectiveAccessLevels = Array.from(new Set([
+    ...(accessLevels || []),
+    ...(userScope?.accessLevel || [])
+  ]));
+
+  if (effectiveAccessLevels.includes('All')) {
+    // Settings is restricted to Admin or Manager unless explicitly granted
+    if (navigator.id.toLowerCase() === 'settings' || navigator.moduleName === 'Settings') {
+      return effectiveAccessLevels.includes('Settings') || userScope?.role === 'Manager';
+    }
+    return true;
+  }
+
+  // General public / universal navigators
+  if (navigator.id === 'contact-portfolio') {
+    return true;
+  }
+
+  if (navigator.id === 'dashboard') {
+    return true;
+  }
+
+  if (navigator.id === 'anniversaries' && (effectiveAccessLevels.includes('Employee Directory') || effectiveAccessLevels.includes('All'))) {
+    return true;
+  }
+
+  // Direct moduleName match
+  if (effectiveAccessLevels.includes(navigator.moduleName)) {
+    return true;
+  }
+
+  // Canonical aliases and module mapping
+  const modLower = navigator.moduleName.toLowerCase();
+  const idLower = navigator.id.toLowerCase();
+
+  const isMatching = effectiveAccessLevels.some(lvl => {
+    const l = lvl.trim().toLowerCase();
+    if (l === modLower || l === idLower) return true;
+
+    // Daily Tasks
+    if ((idLower === 'tasks' || modLower === 'daily tasks') && (l === 'daily tasks' || l === 'tasks')) return true;
+
+    // Gemba Walks
+    if ((idLower === 'gemba-walks' || modLower === 'gemba walks') && (l === 'gemba walks' || l === 'gemba')) return true;
+
+    // 5S & Visual Management
+    if ((idLower === '5s-management' || idLower === '5s-leaders' || modLower === '5s & visual management') && 
+        (l === '5s & visual management' || l === '5s' || l === 'visual management' || l === '5s management')) return true;
+
+    // KPI Performance & Reviews
+    if ((idLower === 'kpi' || idLower === 'reviews' || modLower === 'kpi performance') && 
+        (l === 'kpi performance' || l === 'monthly kpi' || l === 'kpi' || l === 'performance reviews')) return true;
+
+    // Machine & Skills (Breakdown, Machine Capacity, Skill Matrix)
+    if ((idLower === 'machine' || idLower === 'breakdown' || idLower === 'skill-dashboard' || modLower === 'machine & skills') && 
+        (l === 'machine & skills' || l === 'machine capacity' || l === 'machine' || l === 'breakdown log' || l === 'breakdown' || l === 'skill matrix' || l === 'skills')) return true;
+
+    // Employee Directory & Promotions
+    if ((idLower === 'directory' || idLower === 'promotions' || modLower === 'employee directory') && 
+        (l === 'employee directory' || l === 'directory' || l === 'employee promotions' || l === 'promotions')) return true;
+
+    // Shift Assignments
+    if ((idLower === 'shifts' || modLower === 'shift assignments') && (l === 'shift assignments' || l === 'shifts')) return true;
+
+    // Leave Management
+    if ((idLower === 'leave' || modLower === 'leave management') && (l === 'leave management' || l === 'leave')) return true;
+
+    // Overtime
+    if ((idLower === 'overtime' || modLower === 'overtime') && (l === 'overtime')) return true;
+
+    // Best Practices
+    if ((idLower === 'practices' || modLower === 'best practices') && (l === 'best practices' || l === 'practices')) return true;
+
+    // Reports & Export
+    if ((idLower === 'reports' || modLower === 'reports & export') && (l === 'reports & export' || l === 'reports')) return true;
+
+    // Settings
+    if ((idLower === 'settings' || idLower === 'storage-cleanup' || modLower === 'settings') && (l === 'settings')) return true;
+
+    return false;
+  });
+
+  return isMatching;
 }
 
 // Find a navigator object by ID or Name
@@ -357,7 +493,9 @@ export function resolveUserLandingNavigator(
                       authorizedNavigators[0] ||
                       DEFAULT_SYSTEM_NAVIGATORS[0];
 
-  const assignedNavVal = userScope?.defaultNavigator?.trim();
+  const assignedNavVal = userScope?.defaultNavigator?.trim() || 
+    (userScope?.username ? localStorage.getItem(`erp_user_default_nav_${userScope.username.toLowerCase()}`) : null) ||
+    (userScope?.email ? localStorage.getItem(`erp_user_default_nav_${userScope.email.toLowerCase()}`) : null);
 
   // If no default navigator is explicitly assigned, use standard default
   if (!assignedNavVal) {
