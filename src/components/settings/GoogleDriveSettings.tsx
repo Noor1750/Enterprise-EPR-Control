@@ -61,7 +61,7 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
 
   const isLocalDb = !spreadsheetId || spreadsheetId === 'local-storage-db';
   const currentUserEmail = user?.email || 'Not Signed In';
-  const isTargetSuperAdmin = currentUserEmail.toLowerCase() === 'smltrimsbd@gmail.com';
+  const isTargetSuperAdmin = currentUserEmail.toLowerCase() === 'noor.alam1750@gmail.com' || currentUserEmail.toLowerCase() === 'smltrimsbd@gmail.com';
 
   const copySpreadsheetId = () => {
     navigator.clipboard.writeText(spreadsheetId);
@@ -349,8 +349,8 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
 
           <p className="text-[11px] text-gray-500">
             {isTargetSuperAdmin 
-              ? 'You are signed in as smltrimsbd@gmail.com with Full Super Admin permissions.'
-              : 'To move or create spreadsheets directly in smltrimsbd@gmail.com, log in using "Continue with Google".'}
+              ? `You are signed in as ${currentUserEmail} with Full Primary Super Admin permissions.`
+              : 'To move or create spreadsheets directly in your primary Drive, log in with noor.alam1750@gmail.com.'}
           </p>
         </div>
 

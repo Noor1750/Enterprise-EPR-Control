@@ -223,7 +223,7 @@ ROLE_DEFAULT_PERMISSIONS['Standard User'] = ROLE_DEFAULT_PERMISSIONS['User'];
 ROLE_DEFAULT_PERMISSIONS['Operator'] = ROLE_DEFAULT_PERMISSIONS['User'];
 
 export const DEFAULT_ADMIN_SCOPE: UserSecurityScope = {
-  username: 'smltrimsbd@gmail.com',
+  username: 'noor.alam1750@gmail.com',
   role: 'Admin',
   status: 'Active',
   accessLevel: ['All'],
@@ -232,8 +232,8 @@ export const DEFAULT_ADMIN_SCOPE: UserSecurityScope = {
   assignedEmployeeIds: [],
   assignedDepartment: '',
   employeeId: 'ADMIN-001',
-  employeeName: `Admin (${getCompanyName()})`,
-  employeeDesignation: 'System Administrator',
+  employeeName: 'Md. Noor Alam (Super Admin)',
+  employeeDesignation: 'Primary Owner & Super Administrator',
   inputPermissions: ['all'],
   defaultNavigator: 'dashboard',
   isAdmin: true,

@@ -32,6 +32,7 @@ import IdleSessionWatcher from './common/IdleSessionWatcher';
 import PerformanceMonitorModal from './common/PerformanceMonitorModal';
 import { useGlobalLoading } from '../lib/loadingEngine';
 import CommandPalette from './common/CommandPalette';
+import SMLSmartAssistant from './assistant/SMLSmartAssistant';
 import EmployeeProfileModal from './employee/EmployeeProfileModal';
 import { Employee } from './kpi/types';
 import { EmployeeShiftState, parseEmployeeShiftState } from '../lib/shiftEngine';
@@ -1514,6 +1515,17 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
         isOpen={isPerformanceModalOpen}
         onClose={() => setIsPerformanceModalOpen(false)}
         spreadsheetId={spreadsheetId}
+      />
+
+      {/* SML Smart Assistant — Enterprise Digital Employee */}
+      <SMLSmartAssistant
+        userSecurityScope={userSecurityScope}
+        accessLevels={accessLevels}
+        spreadsheetId={spreadsheetId}
+        employees={employees}
+        tasks={tasks}
+        holidays={holidays}
+        onNavigate={handleCommandNavigate}
       />
 
       {/* Global Application Loading Animation Overlay */}
