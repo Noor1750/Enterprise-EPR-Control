@@ -253,6 +253,82 @@ Return a strictly valid JSON response with this structure:
     }
   });
 
+  // Shared Configuration & Database Persistence Endpoints
+  const DATA_DIR = path.join(process.cwd(), "data");
+  const CONFIG_FILE = path.join(DATA_DIR, "config.json");
+  const DB_FILE = path.join(DATA_DIR, "db.json");
+
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (e) {
+    console.warn("Could not create data directory:", e);
+  }
+
+  // Get shared app configuration (e.g. spreadsheetId)
+  app.get("/api/config", (req, res) => {
+    try {
+      if (fs.existsSync(CONFIG_FILE)) {
+        const content = fs.readFileSync(CONFIG_FILE, "utf-8");
+        return res.json(JSON.parse(content));
+      }
+    } catch (e) {
+      console.warn("Failed to read config:", e);
+    }
+    return res.json({ spreadsheetId: process.env.VITE_SPREADSHEET_ID || "local-storage-db" });
+  });
+
+  // Update shared app configuration
+  app.post("/api/config", (req, res) => {
+    try {
+      const { spreadsheetId } = req.body;
+      const config = { spreadsheetId: spreadsheetId || "local-storage-db", updatedAt: new Date().toISOString() };
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
+      return res.json({ success: true, config });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Get sheet data from shared database store
+  app.get("/api/db/:sheetName", (req, res) => {
+    try {
+      const { sheetName } = req.params;
+      if (fs.existsSync(DB_FILE)) {
+        const content = fs.readFileSync(DB_FILE, "utf-8");
+        const allData = JSON.parse(content);
+        if (allData[sheetName]) {
+          return res.json({ data: allData[sheetName] });
+        }
+      }
+      return res.json({ data: null });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Save sheet data to shared database store
+  app.post("/api/db/:sheetName", (req, res) => {
+    try {
+      const { sheetName } = req.params;
+      const { data } = req.body;
+      let allData: Record<string, any> = {};
+      if (fs.existsSync(DB_FILE)) {
+        try {
+          allData = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
+        } catch {
+          allData = {};
+        }
+      }
+      allData[sheetName] = data;
+      fs.writeFileSync(DB_FILE, JSON.stringify(allData, null, 2), "utf-8");
+      return res.json({ success: true });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // Vite middleware for development / static serving for production
   const isRunningAsBundle =
     typeof __filename !== "undefined" &&

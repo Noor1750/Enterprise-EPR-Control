@@ -1,0 +1,64 @@
+{
+  "Users": [
+    [
+      "Username",
+      "Password_Hash",
+      "Role",
+      "Status",
+      "Access_Level",
+      "Supervisor_Name",
+      "Access_Limit_Type",
+      "Assigned_Employee_IDs",
+      "Assigned_Department",
+      "Employee_ID",
+      "Employee_Name",
+      "Input_Permissions",
+      "Default_Navigator"
+    ],
+    [
+      "smltrimsbd@gmail.com",
+      "Samia@628",
+      "Admin",
+      "Active",
+      "All",
+      "",
+      "all",
+      "",
+      "",
+      "ADMIN-001",
+      "Admin (SML Trims BD)",
+      "all",
+      "dashboard"
+    ],
+    [
+      "noor.alam1750@gmail.com",
+      "Samia@628",
+      "Admin",
+      "Active",
+      "All",
+      "",
+      "all",
+      "",
+      "",
+      "ADMIN-002",
+      "Md. Noor Alam",
+      "all",
+      "dashboard"
+    ],
+    [
+      "djmamun663@gmail.com",
+      "Samia@628",
+      "Admin",
+      "Active",
+      "All",
+      "",
+      "all",
+      "",
+      "Cutting",
+      "ADMIN-003",
+      "Mamunur Rashid",
+      "all",
+      "dashboard"
+    ]
+  ]
+}

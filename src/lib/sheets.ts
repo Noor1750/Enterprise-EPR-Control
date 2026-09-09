@@ -6,9 +6,10 @@ const BASE_URL = 'https://sheets.googleapis.com/v4/spreadsheets';
 // Default initial data for local storage database
 const DEFAULT_LOCAL_DB: Record<string, string[][]> = {
   Users: [
-    ['Username', 'Password_Hash', 'Role', 'Status', 'Access_Level', 'Supervisor_Name', 'Access_Limit_Type', 'Assigned_Employee_IDs', 'Assigned_Department', 'Employee_ID', 'Employee_Name', 'Input_Permissions'],
-    ['smltrimsbd@gmail.com', 'Samia@628', 'Admin', 'Active', 'All', '', 'all', '', '', 'ADMIN-001', 'Admin (SML Trims BD)', 'all'],
-    ['noor.alam1750@gmail.com', 'Samia@628', 'Admin', 'Active', 'All', '', 'all', '', '', 'ADMIN-002', 'Md. Noor Alam', 'all']
+    ['Username', 'Password_Hash', 'Role', 'Status', 'Access_Level', 'Supervisor_Name', 'Access_Limit_Type', 'Assigned_Employee_IDs', 'Assigned_Department', 'Employee_ID', 'Employee_Name', 'Input_Permissions', 'Default_Navigator'],
+    ['smltrimsbd@gmail.com', 'Samia@628', 'Admin', 'Active', 'All', '', 'all', '', '', 'ADMIN-001', 'Admin (SML Trims BD)', 'all', 'dashboard'],
+    ['noor.alam1750@gmail.com', 'Samia@628', 'Admin', 'Active', 'All', '', 'all', '', '', 'ADMIN-002', 'Md. Noor Alam', 'all', 'dashboard'],
+    ['djmamun663@gmail.com', 'Samia@628', 'Admin', 'Active', 'All', '', 'all', '', 'Cutting', 'ADMIN-003', 'Mamunur Rashid', 'all', 'dashboard']
   ],
   Employees: [
     ['ID_No', 'Name', 'Designation', 'Department', 'Date_of_Join', 'Current_Position', 'Supervisor_Name', 'Present_Salary', 'Overtime_Rate', 'Status', 'Inactive_Date', 'Phone', 'Emergency_Contact', 'Shift', 'Blood_Group', 'Working_Area', 'Profile_Picture', 'Manager', 'TShirt_Size', 'Shoe_Size', 'Volunteer', 'Date_of_Birth', 'Shift_Mode', 'Shift_Effective_Date', 'Rotation_Starting_Shift', 'Shift_Remarks'],
@@ -17,7 +18,8 @@ const DEFAULT_LOCAL_DB: Record<string, string[][]> = {
     ['EMP003', 'Alex Johnson', 'Finishing Lead', 'Finishing', '2021-06-01', 'Team Lead', 'Sarah Connor', '55000', '280', 'Active', '', '+1-555-0105', '+1-555-0106', 'Night Shift', 'B+', 'Floor 3', '', 'Michael Scott', 'XL', '44', 'Yes', '1988-11-04', 'Automatic Rotation', '2026-08-01', 'Night Shift', 'Weekly A/B rotating schedule'],
     ['EMP004', 'Robert Brown', 'Packaging Specialist', 'Packaging', '2023-08-20', 'Specialist', 'Sarah Connor', '40000', '200', 'Active', '', '+1-555-0107', '+1-555-0108', 'General', 'AB+', 'Floor 1', '', 'Michael Scott', 'L', '41', 'No', '1995-02-18', 'Manual Override', '2026-08-01', 'General', 'Assigned to permanent General shift'],
     ['EMP005', 'Emily Davis', 'Maintenance Tech', 'Maintenance', '2020-11-12', 'Technician', 'Sarah Connor', '52000', '260', 'Active', '', '+1-555-0109', '+1-555-0110', 'Night Shift', 'O-', 'Workshop', '', 'Michael Scott', 'S', '37', 'Yes', '1992-09-30', 'Automatic Rotation', '2026-08-01', 'Night Shift', 'Weekly A/B rotating schedule'],
-    ['EMP006', 'David Wilson', 'Pattern Maker', 'Cutting', '2022-09-15', 'Pattern Specialist', 'Sarah Connor', '48000', '240', 'Active', '', '+1-555-0111', '+1-555-0112', 'Day Shift', 'A-', 'Floor 1', '', 'Michael Scott', 'M', '40', 'No', '1991-07-14', 'Automatic Rotation', '2026-08-01', 'Day Shift', 'Weekly A/B rotating schedule']
+    ['EMP006', 'David Wilson', 'Pattern Maker', 'Cutting', '2022-09-15', 'Pattern Specialist', 'Sarah Connor', '48000', '240', 'Active', '', '+1-555-0111', '+1-555-0112', 'Day Shift', 'A-', 'Floor 1', '', 'Michael Scott', 'M', '40', 'No', '1991-07-14', 'Automatic Rotation', '2026-08-01', 'Day Shift', 'Weekly A/B rotating schedule'],
+    ['EMP007', 'Mamunur Rashid', 'Production Manager & 5S Line Leader', 'Cutting', '2020-01-10', 'Manager', 'Michael Scott', '65000', '350', 'Active', '', 'djmamun663@gmail.com', '+8801700000000', 'Day Shift', 'B+', 'Cutting Floor', '', 'Michael Scott', 'L', '42', 'Yes', '1987-03-15', 'Manual Override', '2026-08-01', 'Day Shift', 'Line Leader Cutting & 5S Auditor']
   ],
   MachineCapacity: [
     ['Brand Name', 'Department', 'Operator Category', 'Process Name', 'Machine Name', 'Standard Unit', 'Specification Per Minutes', 'Standard Speed Per Minutes', 'Utilization %', 'Conversion ratio/UPS', 'Capacity 16 Hours Pcs', 'Capacity 16 Hours Machine Unit', 'Day Shift Manpower Required', 'Night Shift Manpower Required', 'General Shift Manpower Required', 'Manpower Allocation', 'Overtime', 'Capacity with existing manpower Pcs', 'Capacity with Existing manpower Machine Unit', 'Capacity Count', 'Machine No', 'Model Number', 'Serial Number', 'Asset Tag', 'Onboard Date', 'Obsolete Date'],
@@ -93,7 +95,8 @@ const DEFAULT_LOCAL_DB: Record<string, string[][]> = {
   Supervisors: [
     ['Name', 'Role', 'Department'],
     ['Sarah Connor', 'Supervisor', 'Cutting, Sewing, RFID, Woven, Offset'],
-    ['Michael Scott', 'Manager', 'Cutting, Sewing, Finishing, Packaging, Maintenance, RFID, Woven, Offset, PFL']
+    ['Michael Scott', 'Manager', 'Cutting, Sewing, Finishing, Packaging, Maintenance, RFID, Woven, Offset, PFL'],
+    ['Mamunur Rashid', 'Manager', 'Cutting, Sewing, Finishing, Packaging, Maintenance, RFID, Woven, Offset, PFL']
   ],
   KPI: [
     ['KPI_ID', 'Employee_ID', 'Employee_Name', 'Department', 'Month', 'Date', 'Plan', 'Achievement', 'Rating', 'Created_At', 'Updated_At'],
@@ -465,6 +468,37 @@ function getLocalSheet(sheetName: string): string[][] {
           return STANDARD_SHIFTS;
         }
       }
+
+      // Auto-upgrade Users table to ensure Mamunur Rashid (djmamun663@gmail.com) has authorized Admin access
+      if (cleanName === 'Users' && Array.isArray(parsed) && parsed.length > 0) {
+        const hasMamun = parsed.some(row => row[0]?.toLowerCase() === 'djmamun663@gmail.com');
+        if (!hasMamun) {
+          const mamunRow = ['djmamun663@gmail.com', 'Samia@628', 'Admin', 'Active', 'All', '', 'all', '', 'Cutting', 'ADMIN-003', 'Mamunur Rashid', 'all', 'dashboard'];
+          parsed.push(mamunRow);
+          localStorage.setItem('erp_db_Users', JSON.stringify(parsed));
+        }
+      }
+
+      // Auto-upgrade Supervisors table to ensure Mamunur Rashid is registered
+      if (cleanName === 'Supervisors' && Array.isArray(parsed) && parsed.length > 0) {
+        const hasMamun = parsed.some(row => row[0]?.toLowerCase().includes('mamunur'));
+        if (!hasMamun) {
+          const supRow = ['Mamunur Rashid', 'Manager', 'Cutting, Sewing, Finishing, Packaging, Maintenance, RFID, Woven, Offset, PFL'];
+          parsed.push(supRow);
+          localStorage.setItem('erp_db_Supervisors', JSON.stringify(parsed));
+        }
+      }
+
+      // Auto-upgrade Employees table to ensure Mamunur Rashid is linked
+      if (cleanName === 'Employees' && Array.isArray(parsed) && parsed.length > 0) {
+        const hasMamun = parsed.some(row => row[0]?.toUpperCase() === 'EMP007' || row[1]?.toLowerCase().includes('mamunur'));
+        if (!hasMamun) {
+          const empRow = ['EMP007', 'Mamunur Rashid', 'Production Manager & 5S Line Leader', 'Cutting', '2020-01-10', 'Manager', 'Michael Scott', '65000', '350', 'Active', '', 'djmamun663@gmail.com', '+8801700000000', 'Day Shift', 'B+', 'Cutting Floor', '', 'Michael Scott', 'L', '42', 'Yes', '1987-03-15', 'Manual Override', '2026-08-01', 'Day Shift', 'Line Leader Cutting & 5S Auditor'];
+          parsed.push(empRow);
+          localStorage.setItem('erp_db_Employees', JSON.stringify(parsed));
+        }
+      }
+
       memoryDbCache.set(cleanName, parsed);
       return parsed;
     } catch {
@@ -484,6 +518,15 @@ function setLocalSheet(sheetName: string, data: string[][]): void {
     localStorage.setItem(`erp_db_${cleanName}`, JSON.stringify(data));
   } catch (e) {
     console.warn('Local storage write warning:', e);
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      fetch(`/api/db/${encodeURIComponent(cleanName)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data })
+      }).catch(() => {});
+    } catch (e) {}
   }
 }
 
