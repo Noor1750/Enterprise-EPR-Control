@@ -190,7 +190,7 @@ export const DEFAULT_SYSTEM_NAVIGATORS: SystemNavigator[] = [
   {
     id: 'contact-portfolio',
     name: 'Developer Contact',
-    moduleName: 'All',
+    moduleName: 'Developer Contact',
     description: 'Developer Profile, Portrait Photo, Direct Contact Channels & Support Inquiry Messenger',
     category: 'Operations',
     iconName: 'User',
@@ -378,10 +378,6 @@ export function hasNavigatorAccess(
   }
 
   // General public / universal navigators
-  if (navigator.id === 'contact-portfolio') {
-    return true;
-  }
-
   if (navigator.id === 'dashboard') {
     return true;
   }
@@ -442,6 +438,10 @@ export function hasNavigatorAccess(
 
     // Settings
     if ((idLower === 'settings' || idLower === 'storage-cleanup' || modLower === 'settings') && (l === 'settings')) return true;
+
+    // Developer Contact
+    if ((idLower === 'contact-portfolio' || modLower === 'developer contact') && 
+        (l === 'developer contact' || l === 'contact' || l === 'contact-portfolio' || l === 'developer contact & profile')) return true;
 
     return false;
   });

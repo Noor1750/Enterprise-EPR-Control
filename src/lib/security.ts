@@ -84,7 +84,8 @@ export const ALL_SYSTEM_MODULES = [
   { id: 'supervisors', name: 'Supervisors Registry', category: 'Security & Access' },
   { id: 'holidays', name: 'Official Holidays & Calendar', category: 'System Calendar' },
   { id: 'settings', name: 'Security & Access Control', category: 'Administration' },
-  { id: 'database', name: 'Google Drive & Cloud DB', category: 'Administration' }
+  { id: 'database', name: 'Google Drive & Cloud DB', category: 'Administration' },
+  { id: 'contact-portfolio', name: 'Developer Contact', category: 'System & Organization' }
 ];
 
 export const ALL_PERMISSION_TYPES: { id: PermissionType; name: string; desc: string }[] = [
@@ -136,7 +137,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, ModulePermi
     supervisors: { permissions: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'assign', 'export', 'import', 'print', 'configure', 'manage'], scope: 'All Data' },
     holidays: { permissions: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'assign', 'export', 'import', 'print', 'configure', 'manage'], scope: 'All Data' },
     settings: { permissions: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'assign', 'export', 'import', 'print', 'configure', 'manage'], scope: 'All Data' },
-    database: { permissions: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'assign', 'export', 'import', 'print', 'configure', 'manage'], scope: 'All Data' }
+    database: { permissions: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'assign', 'export', 'import', 'print', 'configure', 'manage'], scope: 'All Data' },
+    'contact-portfolio': { permissions: ['view', 'create', 'edit', 'delete', 'approve', 'reject', 'assign', 'export', 'import', 'print', 'configure', 'manage'], scope: 'All Data' }
   },
   Manager: {
     dashboard: { permissions: ['view', 'export', 'print'], scope: 'Department' },
@@ -156,7 +158,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, ModulePermi
     supervisors: { permissions: ['view'], scope: 'Department' },
     holidays: { permissions: ['view', 'export'], scope: 'All Data' },
     settings: { permissions: [], scope: 'Own Data' }, // Forbidden unless granted
-    database: { permissions: [], scope: 'Own Data' } // Forbidden unless granted
+    database: { permissions: [], scope: 'Own Data' }, // Forbidden unless granted
+    'contact-portfolio': { permissions: ['view', 'export', 'print'], scope: 'Department' }
   },
   Superuser: {
     dashboard: { permissions: ['view', 'export', 'print'], scope: 'All Data' },
@@ -176,7 +179,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, ModulePermi
     supervisors: { permissions: ['view'], scope: 'All Data' },
     holidays: { permissions: ['view'], scope: 'All Data' },
     settings: { permissions: [], scope: 'Own Data' }, // Superuser cannot access security
-    database: { permissions: [], scope: 'Own Data' } // Superuser cannot access database migration
+    database: { permissions: [], scope: 'Own Data' }, // Superuser cannot access database migration
+    'contact-portfolio': { permissions: ['view', 'export', 'print'], scope: 'All Data' }
   },
   Supervisor: {
     dashboard: { permissions: ['view'], scope: 'Assigned Staff' },
@@ -196,7 +200,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, ModulePermi
     supervisors: { permissions: ['view'], scope: 'Own Data' },
     holidays: { permissions: ['view'], scope: 'All Data' },
     settings: { permissions: [], scope: 'Own Data' },
-    database: { permissions: [], scope: 'Own Data' }
+    database: { permissions: [], scope: 'Own Data' },
+    'contact-portfolio': { permissions: ['view'], scope: 'Assigned Staff' }
   },
   User: {
     dashboard: { permissions: ['view'], scope: 'Own Data' },
@@ -216,7 +221,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Record<string, ModulePermi
     supervisors: { permissions: ['view'], scope: 'Own Data' },
     holidays: { permissions: ['view'], scope: 'All Data' },
     settings: { permissions: [], scope: 'Own Data' },
-    database: { permissions: [], scope: 'Own Data' }
+    database: { permissions: [], scope: 'Own Data' },
+    'contact-portfolio': { permissions: ['view'], scope: 'Own Data' }
   }
 };
 

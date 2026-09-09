@@ -512,7 +512,7 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
     { id: 'reports', name: 'Reports & Export', icon: DownloadCloud, moduleName: 'Reports & Export', category: 'Analytics & Performance' },
 
     { id: 'settings', name: 'Settings', icon: Settings, moduleName: 'Settings', category: 'System & Organization' },
-    { id: 'contact-portfolio', name: 'Developer Contact', icon: UserIcon, moduleName: 'All', category: 'System & Organization' },
+    { id: 'contact-portfolio', name: 'Developer Contact', icon: UserIcon, moduleName: 'Developer Contact', category: 'System & Organization' },
   ];
 
   const hasAccess = (navIdOrModuleName: string) => {

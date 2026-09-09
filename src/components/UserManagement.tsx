@@ -57,7 +57,8 @@ const TAB_MODULES = [
   'Reports & Export',
   'Settings',
   'Salary',
-  'Overtime Rate'
+  'Overtime Rate',
+  'Developer Contact'
 ];
 
 const EDIT_MODULES = [

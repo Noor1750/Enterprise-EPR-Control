@@ -215,9 +215,9 @@ const SYSTEM_NAVIGATION_ITEMS: NavigationItem[] = [
     category: 'Operations',
     description: 'Developer profile photo, contact information, direct communication & inquiry messenger',
     icon: UserCheck,
-    moduleName: 'All',
+    moduleName: 'Developer Contact',
     keywords: ['developer', 'contact', 'developer contact', 'john moore', 'profile', 'photo', 'avatar', 'email', 'phone', 'support'],
-    badge: 'Everyone'
+    badge: 'Contact'
   },
   {
     id: 'reports',
