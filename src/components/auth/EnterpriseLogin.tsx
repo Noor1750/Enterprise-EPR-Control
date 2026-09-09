@@ -340,37 +340,6 @@ export default function EnterpriseLogin({
               </button>
             </form>
 
-            {/* Divider */}
-            <div className="relative flex items-center justify-center">
-              <div className="w-full border-t border-slate-200" />
-              <span className="bg-white px-3 text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                Or Continue With
-              </span>
-            </div>
-
-            {/* Google Authentication Button */}
-            <button
-              type="button"
-              disabled={isLoading || isGoogleSubmitting}
-              onClick={async () => {
-                if (isLoading || isGoogleSubmitting) return;
-                setIsGoogleSubmitting(true);
-                try {
-                  await onGoogleLogin();
-                } finally {
-                  setIsGoogleSubmitting(false);
-                }
-              }}
-              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs sm:text-sm font-bold shadow-xs hover:border-slate-300 transition active:scale-[0.99] disabled:opacity-50"
-            >
-              <img
-                src="https://www.svgrepo.com/show/475656/google-color.svg"
-                alt="Google logo"
-                className="w-4 h-4"
-              />
-              <span>{isGoogleSubmitting ? 'Connecting...' : 'Continue with Google'}</span>
-            </button>
-
           </div>
 
           {/* Card Footer: Enterprise Security Notice */}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, Wrench, Calendar, Check, Clock, FileSpreadsheet, 
@@ -217,21 +217,94 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
     return () => window.removeEventListener('erp-theme-changed', handleThemeEvent);
   }, []);
 
-  // Active online users (other logged-in users with photos and profile info)
-  const onlineUsers = useMemo(() => {
-    const active = employees.filter(e => e.status === 'Active' && e.id !== userSecurityScope?.employeeId);
-    if (active.length > 0) {
-      return active.slice(0, 5);
-    }
-    return [
-      { id: 'EMP-101', name: 'Farhana Yasmin', designation: 'Production Supervisor', department: 'Production', status: 'Active', profilePicture: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80' },
-      { id: 'EMP-102', name: 'Tanvir Ahmed', designation: 'Quality Lead', department: 'Quality Assurance', status: 'Active', profilePicture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' },
-      { id: 'EMP-103', name: 'Rashid Khan', designation: 'Maintenance Tech', department: 'Maintenance', status: 'Active', profilePicture: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80' },
-      { id: 'EMP-104', name: 'Sadia Rahman', designation: 'HR Specialist', department: 'HR & Admin', status: 'Active', profilePicture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80' }
-    ] as Employee[];
-  }, [employees, userSecurityScope]);
+  // Active online users: Tracking ONLY who is currently online in active sessions
+  const [actualOnlineUsers, setActualOnlineUsers] = useState<Array<{
+    id: string;
+    name: string;
+    designation: string;
+    department: string;
+    profilePicture?: string;
+    lastActive: number;
+    isCurrentUser?: boolean;
+  }>>([]);
 
   const currentUserPhoto = (userSecurityScope as any)?.employeePhoto || user.photoURL || employees.find(e => e.id === userSecurityScope?.employeeId || (e as any).email === user.email)?.profilePicture || '';
+
+  useEffect(() => {
+    const updatePresence = () => {
+      try {
+        const now = Date.now();
+        const currentId = userSecurityScope?.employeeId || user.email || 'USER-1';
+        const currentName = userSecurityScope?.employeeName || user.displayName || 'Admin (SML Trims BD)';
+        const currentDesig = userSecurityScope?.role || 'Administrator';
+        const currentDept = userSecurityScope?.assignedDepartment || 'Management';
+        const currentPic = currentUserPhoto || '';
+
+        const raw = localStorage.getItem('erp_active_user_presence');
+        let presenceMap: Record<string, any> = {};
+        if (raw) {
+          try { presenceMap = JSON.parse(raw) || {}; } catch {}
+        }
+
+        // Keep current user updated with recent heartbeat
+        presenceMap[currentId] = {
+          id: currentId,
+          name: currentName,
+          designation: currentDesig,
+          department: currentDept,
+          profilePicture: currentPic,
+          lastActive: now,
+          isCurrentUser: true
+        };
+
+        // Filter sessions active within the last 3 minutes
+        const activeList: any[] = [];
+        const cleanedMap: Record<string, any> = {};
+        for (const [k, v] of Object.entries(presenceMap)) {
+          if (v && now - (v.lastActive || 0) < 180000) {
+            cleanedMap[k] = v;
+            activeList.push({
+              ...v,
+              isCurrentUser: k === currentId
+            });
+          }
+        }
+
+        localStorage.setItem('erp_active_user_presence', JSON.stringify(cleanedMap));
+        setActualOnlineUsers(activeList);
+      } catch (err) {
+        setActualOnlineUsers([{
+          id: userSecurityScope?.employeeId || 'USER-1',
+          name: userSecurityScope?.employeeName || user.displayName || 'Admin',
+          designation: userSecurityScope?.role || 'Admin',
+          department: userSecurityScope?.assignedDepartment || 'Management',
+          profilePicture: currentUserPhoto || '',
+          lastActive: Date.now(),
+          isCurrentUser: true
+        }]);
+      }
+    };
+
+    updatePresence();
+    const interval = setInterval(updatePresence, 20000);
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'erp_active_user_presence') {
+        try {
+          const parsed = JSON.parse(e.newValue || '{}');
+          const now = Date.now();
+          const list = Object.values(parsed).filter((u: any) => u && now - (u.lastActive || 0) < 180000);
+          if (list.length > 0) setActualOnlineUsers(list as any);
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [userSecurityScope, user, currentUserPhoto]);
 
   // Auto-resolve landing navigator when user logs in and permissions load
   useEffect(() => {
@@ -258,25 +331,26 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
   }, []);
 
   // Load employee master list with SWR tier caching
-  useEffect(() => {
+  const fetchEmployees = useCallback(async (forceRefresh: boolean = false) => {
     if (!spreadsheetId) return;
-    const fetchEmployees = async () => {
-      try {
-        const [mapped, parsedShifts] = await Promise.all([
-          getCachedEmployees(spreadsheetId),
-          getCachedShiftEmployees(spreadsheetId)
-        ]);
-        if (mapped && mapped.length > 0) setEmployees(mapped);
-        if (parsedShifts && parsedShifts.length > 0) setShiftEmployees(parsedShifts);
-      } catch (err) {
-        console.error('Failed to load master employees in Layout:', err);
-      }
-    };
-    fetchEmployees();
-
-    // Warm cache in background for fast navigations
-    prefetchEssentialData(spreadsheetId).catch(() => {});
+    try {
+      const [mapped, parsedShifts] = await Promise.all([
+        getCachedEmployees(spreadsheetId, forceRefresh),
+        getCachedShiftEmployees(spreadsheetId, new Date(), forceRefresh)
+      ]);
+      if (mapped && mapped.length > 0) setEmployees(mapped);
+      if (parsedShifts && parsedShifts.length > 0) setShiftEmployees(parsedShifts);
+    } catch (err) {
+      console.error('Failed to load master employees in Layout:', err);
+    }
   }, [spreadsheetId]);
+
+  useEffect(() => {
+    fetchEmployees(false);
+    if (spreadsheetId) {
+      prefetchEssentialData(spreadsheetId).catch(() => {});
+    }
+  }, [fetchEmployees, spreadsheetId]);
 
   // Load Tasks and Holidays with SWR tier caching for intelligent Daily Task Reminders
   useEffect(() => {
@@ -322,6 +396,9 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
       const sheet = evt?.detail?.sheetName;
       if (!sheet || sheet === 'Tasks' || sheet === 'Holidays') {
         loadTasksAndHolidays(true);
+      }
+      if (!sheet || sheet === 'Employees' || sheet === 'Users' || sheet === 'ShiftEmployees' || sheet === 'All') {
+        fetchEmployees(true);
       }
     };
     const handleTaskAssigned = () => {
@@ -550,9 +627,10 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
   const roleName = userSecurityScope?.role || 'User';
 
   const getInitials = (name: string) => {
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return (name.substring(0, 2) || 'US').toUpperCase();
+    const cleanWords = (name || '').replace(/[^a-zA-Z0-9\s]/g, '').trim().split(/\s+/).filter(Boolean);
+    if (cleanWords.length >= 2) return `${cleanWords[0][0]}${cleanWords[1][0]}`.toUpperCase();
+    if (cleanWords.length === 1) return cleanWords[0].substring(0, 2).toUpperCase();
+    return 'AD';
   };
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1139,10 +1217,10 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
 
               <div className="h-6 w-px bg-slate-200" />
 
-              {/* Other Logged-In / Online Users with Hover Tooltip */}
+              {/* Active Online Users (Showing only who is currently online) */}
               <div className="flex items-center gap-2">
-                <div className="hidden lg:flex items-center -space-x-2 overflow-visible">
-                  {onlineUsers.map((onlineUser, idx) => (
+                <div className="hidden sm:flex items-center -space-x-1.5 overflow-visible">
+                  {actualOnlineUsers.map((onlineUser, idx) => (
                     <div 
                       key={onlineUser.id || idx}
                       className="relative group cursor-pointer"
@@ -1167,7 +1245,7 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
                             className="w-full h-full object-cover" 
                           />
                         ) : (
-                          <span>{(onlineUser.name || 'U').charAt(0)}</span>
+                          <span>{getInitials(onlineUser.name || 'Admin')}</span>
                         )}
                       </div>
 
@@ -1188,7 +1266,7 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
                           <div className="text-[11px] text-slate-300 font-medium mt-0.5">{onlineUser.designation}</div>
                           <div className="text-[10px] text-slate-400 font-semibold">{onlineUser.department}</div>
                           <div className="text-[9px] text-slate-400 font-mono mt-1.5 pt-1.5 border-t border-slate-800">
-                            ID: {onlineUser.id} • Click to view profile
+                            {onlineUser.isCurrentUser ? 'Your Active Session' : `ID: ${onlineUser.id} • Click to view`}
                           </div>
                         </div>
                       </div>
@@ -1198,7 +1276,7 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
 
                 <div className="hidden lg:flex items-center text-[11px] font-bold text-slate-600 bg-slate-100/90 px-2.5 py-1 rounded-full border border-slate-200 shadow-2xs">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
-                  <span>{onlineUsers.length + 1} online</span>
+                  <span>{actualOnlineUsers.length} online</span>
                 </div>
 
                 {/* Live Cache & Performance Telemetry (Admins / Managers) */}

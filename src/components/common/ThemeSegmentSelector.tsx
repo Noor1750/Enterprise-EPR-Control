@@ -43,13 +43,10 @@ export default function ThemeSegmentSelector({ activeModule, onThemeChange, vari
           title={`Color Segment: ${currentPalette.name}`}
         >
           <div 
-            className="w-3 h-3 rounded-full shadow-inner ring-1 ring-black/10 flex items-center justify-center shrink-0" 
+            className="w-2.5 h-2.5 rounded-full shadow-inner ring-1 ring-black/10 flex items-center justify-center shrink-0" 
             style={{ backgroundColor: currentPalette.primaryHex }}
           />
-          <span className="hidden sm:inline font-black tracking-tight">{currentPalette.primaryName}</span>
-          <span className="hidden sm:inline opacity-70">/</span>
-          <span className="hidden sm:inline font-semibold">{currentPalette.secondaryName}</span>
-          <span className="sm:hidden font-black text-[10px]">Theme</span>
+          <span className="font-black tracking-tight text-xs">{currentPalette.shortName || currentPalette.primaryName}</span>
           <ChevronDown className="w-3 h-3 ml-0.5 opacity-70" />
         </button>
 

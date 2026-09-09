@@ -226,6 +226,7 @@ ROLE_DEFAULT_PERMISSIONS['Operator'] = ROLE_DEFAULT_PERMISSIONS['User'];
 
 export const DEFAULT_ADMIN_SCOPE: UserSecurityScope = {
   username: 'noor.alam1750@gmail.com',
+  email: 'noor.alam1750@gmail.com',
   role: 'Admin',
   status: 'Active',
   accessLevel: ['All'],
@@ -257,6 +258,7 @@ export function parseUserSecurityScope(row: string[] | undefined, currentUserEma
       return {
         ...DEFAULT_ADMIN_SCOPE,
         username: currentUserEmail || DEFAULT_ADMIN_SCOPE.username,
+        email: currentUserEmail || DEFAULT_ADMIN_SCOPE.email,
         employeeName: emailLower === 'noor.alam1750@gmail.com' ? 'Md. Noor Alam' : `Admin (${getCompanyName()})`
       };
     }
@@ -264,6 +266,7 @@ export function parseUserSecurityScope(row: string[] | undefined, currentUserEma
     const fallbackName = formatEmailToName(cleanEmail);
     return {
       username: cleanEmail,
+      email: cleanEmail,
       role: 'User',
       status: 'Active',
       accessLevel: ['Employee Directory'],
@@ -341,6 +344,7 @@ export function parseUserSecurityScope(row: string[] | undefined, currentUserEma
 
   return {
     username,
+    email: currentUserEmail || username,
     role: isAdmin ? 'Admin' : isManager ? 'Manager' : isSuperuser ? 'Superuser' : isSupervisor ? 'Supervisor' : 'User',
     status,
     accessLevel,

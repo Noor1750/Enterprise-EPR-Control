@@ -1,6 +1,7 @@
 export interface ColorPalette {
   id: string;
   name: string;
+  shortName: string;
   primaryName: string;
   primaryHex: string;
   secondaryName: string;
@@ -24,6 +25,7 @@ export const COLOR_PALETTES: ColorPalette[] = [
   {
     id: 'ink-teal-warm-sand',
     name: 'Ink Teal & Warm Sand',
+    shortName: 'Teal',
     primaryName: 'Ink Teal',
     primaryHex: '#053D3A',
     secondaryName: 'Warm Sand',
@@ -44,6 +46,7 @@ export const COLOR_PALETTES: ColorPalette[] = [
   {
     id: 'dark-olive-fresh-lemon',
     name: 'Dark Olive & Fresh Lemon',
+    shortName: 'Olive',
     primaryName: 'Dark Olive',
     primaryHex: '#283113',
     secondaryName: 'Fresh Lemon',
@@ -64,6 +67,7 @@ export const COLOR_PALETTES: ColorPalette[] = [
   {
     id: 'slate-ocean-cloud-mint',
     name: 'Slate Ocean & Cloud Mint',
+    shortName: 'Slate',
     primaryName: 'Slate Ocean',
     primaryHex: '#2F4858',
     secondaryName: 'Cloud Mint',
@@ -84,6 +88,7 @@ export const COLOR_PALETTES: ColorPalette[] = [
   {
     id: 'nordic-indigo-vanilla-mist',
     name: 'Nordic Indigo & Vanilla Mist',
+    shortName: 'Indigo',
     primaryName: 'Nordic Indigo',
     primaryHex: '#263BAA',
     secondaryName: 'Vanilla Mist',
@@ -104,6 +109,7 @@ export const COLOR_PALETTES: ColorPalette[] = [
   {
     id: 'chrome-black-digital-lilac',
     name: 'Chrome Black & Digital Lilac',
+    shortName: 'Lilac',
     primaryName: 'Chrome Black',
     primaryHex: '#0D0D0D',
     secondaryName: 'Digital Lilac',
@@ -124,6 +130,7 @@ export const COLOR_PALETTES: ColorPalette[] = [
   {
     id: 'royal-iris-mint-frost',
     name: 'Royal Iris & Mint Frost',
+    shortName: 'Iris',
     primaryName: 'Royal Iris',
     primaryHex: '#4C1D95',
     secondaryName: 'Mint Frost',

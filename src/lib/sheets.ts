@@ -500,11 +500,28 @@ function notifyDbUpdated(sheetName: string) {
       pendingDispatchSheets.clear();
       sheets.forEach(name => {
         window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName: name } }));
+        try {
+          localStorage.setItem('erp_db_last_update', JSON.stringify({ sheetName: name, timestamp: Date.now() }));
+        } catch (err) {}
       });
     } catch (e) {
       // Ignore event dispatch errors
     }
   }, 50);
+}
+
+// Listen for updates from other tabs or windows
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'erp_db_last_update' && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        if (parsed?.sheetName) {
+          window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName: parsed.sheetName } }));
+        }
+      } catch (err) {}
+    }
+  });
 }
 
 function isLocalStorageDb(spreadsheetId: string | null, token?: string | null): boolean {

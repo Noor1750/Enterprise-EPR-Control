@@ -175,6 +175,18 @@ export default function KPIManagement({
 
   useEffect(() => {
     loadKpiData();
+
+    const handleDbUpdate = (evt: any) => {
+      const sheet = evt?.detail?.sheetName;
+      if (!sheet || sheet === 'KPI' || sheet === 'KpiPrivacy' || sheet === 'Employees' || sheet === 'All') {
+        loadKpiData();
+      }
+    };
+
+    window.addEventListener('erp-db-updated', handleDbUpdate);
+    return () => {
+      window.removeEventListener('erp-db-updated', handleDbUpdate);
+    };
   }, [loadKpiData]);
 
   // Available unique evaluation months in data

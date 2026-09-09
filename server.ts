@@ -254,11 +254,22 @@ Return a strictly valid JSON response with this structure:
   });
 
   // Vite middleware for development / static serving for production
+  const isDevScript =
+    process.env.npm_lifecycle_event === "dev" ||
+    process.env.NODE_ENV === "development";
+
+  const isRunningAsBundle =
+    typeof __filename !== "undefined" &&
+    (__filename.endsWith(".cjs") || __filename.includes("dist"));
+
   const isProduction =
-    process.env.NODE_ENV === "production" ||
-    Boolean(process.env.K_SERVICE) ||
-    process.env.npm_lifecycle_event === "start" ||
-    (!process.env.npm_lifecycle_event && fs.existsSync(path.join(process.cwd(), "dist", "index.html")));
+    !isDevScript &&
+    (isRunningAsBundle ||
+      process.env.NODE_ENV === "production" ||
+      Boolean(process.env.K_SERVICE) ||
+      Boolean(process.env.K_REVISION) ||
+      process.env.npm_lifecycle_event === "start" ||
+      fs.existsSync(path.join(process.cwd(), "dist", "index.html")));
 
   if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
@@ -268,33 +279,80 @@ Return a strictly valid JSON response with this structure:
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = fs.existsSync(path.join(process.cwd(), "dist", "index.html"))
-      ? path.join(process.cwd(), "dist")
-      : process.cwd();
+    const possiblePaths = [
+      path.join(process.cwd(), "dist"),
+      typeof __dirname !== "undefined" ? __dirname : "",
+      typeof __dirname !== "undefined" ? path.join(__dirname, "dist") : "",
+      process.cwd(),
+    ].filter(Boolean);
+
+    const distPath =
+      possiblePaths.find((p) => fs.existsSync(path.join(p, "index.html"))) ||
+      path.join(process.cwd(), "dist");
+
     app.use(express.static(distPath));
+
     app.get("*", (req, res) => {
-      const indexPath = path.join(distPath, "index.html");
+      const indexPath = path.resolve(distPath, "index.html");
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
-        res.status(200).send("Application is starting up...");
+        res.status(200).send("<!DOCTYPE html><html><head><title>OPERATION ERP</title></head><body>Application is starting up...</body></html>");
       }
     });
   }
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  // Error handling middleware
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Internal server error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal Server Error" });
+    }
   });
 
-  server.on("error", (err: any) => {
-    console.error("Server listener error:", err);
+  const activeServers: any[] = [];
+
+  // 1. Primary listener: port 3000 (standard for local dev and AI Studio reverse proxy)
+  const primaryServer = app.listen(3000, "0.0.0.0", () => {
+    console.log(`Primary server running on http://0.0.0.0:3000`);
+  });
+  activeServers.push(primaryServer);
+
+  primaryServer.on("error", (err: any) => {
+    console.error("Primary server listener error on port 3000:", err);
   });
 
-  process.on("SIGTERM", () => {
-    server.close(() => {
-      process.exit(0);
-    });
-  });
+  // 2. Auxiliary listener: process.env.PORT for Cloud Run direct ingress / health checks
+  const cloudRunPort = process.env.PORT ? parseInt(process.env.PORT, 10) : NaN;
+  if (!isNaN(cloudRunPort) && cloudRunPort > 0 && cloudRunPort !== 3000) {
+    try {
+      const cloudRunServer = app.listen(cloudRunPort, "0.0.0.0", () => {
+        console.log(`Cloud Run ingress server listening on http://0.0.0.0:${cloudRunPort}`);
+      });
+      activeServers.push(cloudRunServer);
+
+      cloudRunServer.on("error", (err: any) => {
+        // In environments where an upstream proxy (like nginx on 8080) is already listening,
+        // EADDRINUSE is expected and traffic routes to port 3000 instead.
+        console.log(`Port ${cloudRunPort} listener info: ${err.code || err.message}`);
+      });
+    } catch (auxErr) {
+      console.log("Auxiliary Cloud Run listener caught error:", auxErr);
+    }
+  }
+
+  const shutdown = () => {
+    console.log("Shutting down server instances gracefully...");
+    for (const s of activeServers) {
+      try {
+        s.close();
+      } catch (e) {}
+    }
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 startServer().catch((err) => {
