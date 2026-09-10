@@ -603,7 +603,7 @@ export function canUserManageTargetDefaultNavigator(
   }
 
   // Prevent non-admins from modifying admin accounts
-  if (targetRole.toLowerCase() === 'admin' || targetUsername.toLowerCase() === 'noor.alam1750@gmail.com' || targetUsername.toLowerCase() === 'smltrimsbd@gmail.com' || targetUsername.toLowerCase() === 'djmamun663@gmail.com') {
+  if (targetRole.toLowerCase() === 'admin' || targetUsername.toLowerCase() === 'noor.alam1750@gmail.com' || targetUsername.toLowerCase() === 'smltrimsbd@gmail.com') {
     return { allowed: false, reason: 'Managers cannot modify Administrator accounts.' };
   }
 

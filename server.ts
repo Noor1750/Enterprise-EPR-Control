@@ -253,93 +253,25 @@ Return a strictly valid JSON response with this structure:
     }
   });
 
-  // Shared Configuration & Database Persistence Endpoints
-  const DATA_DIR = path.join(process.cwd(), "data");
-  const CONFIG_FILE = path.join(DATA_DIR, "config.json");
-  const DB_FILE = path.join(DATA_DIR, "db.json");
-
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-  } catch (e) {
-    console.warn("Could not create data directory:", e);
-  }
-
-  // Get shared app configuration (e.g. spreadsheetId)
-  app.get("/api/config", (req, res) => {
-    try {
-      if (fs.existsSync(CONFIG_FILE)) {
-        const content = fs.readFileSync(CONFIG_FILE, "utf-8");
-        return res.json(JSON.parse(content));
-      }
-    } catch (e) {
-      console.warn("Failed to read config:", e);
-    }
-    return res.json({ spreadsheetId: process.env.VITE_SPREADSHEET_ID || "local-storage-db" });
-  });
-
-  // Update shared app configuration
-  app.post("/api/config", (req, res) => {
-    try {
-      const { spreadsheetId } = req.body;
-      const config = { spreadsheetId: spreadsheetId || "local-storage-db", updatedAt: new Date().toISOString() };
-      fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
-      return res.json({ success: true, config });
-    } catch (e: any) {
-      return res.status(500).json({ error: e.message });
-    }
-  });
-
-  // Get sheet data from shared database store
-  app.get("/api/db/:sheetName", (req, res) => {
-    try {
-      const { sheetName } = req.params;
-      if (fs.existsSync(DB_FILE)) {
-        const content = fs.readFileSync(DB_FILE, "utf-8");
-        const allData = JSON.parse(content);
-        if (allData[sheetName]) {
-          return res.json({ data: allData[sheetName] });
-        }
-      }
-      return res.json({ data: null });
-    } catch (e: any) {
-      return res.status(500).json({ error: e.message });
-    }
-  });
-
-  // Save sheet data to shared database store
-  app.post("/api/db/:sheetName", (req, res) => {
-    try {
-      const { sheetName } = req.params;
-      const { data } = req.body;
-      let allData: Record<string, any> = {};
-      if (fs.existsSync(DB_FILE)) {
-        try {
-          allData = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
-        } catch {
-          allData = {};
-        }
-      }
-      allData[sheetName] = data;
-      fs.writeFileSync(DB_FILE, JSON.stringify(allData, null, 2), "utf-8");
-      return res.json({ success: true });
-    } catch (e: any) {
-      return res.status(500).json({ error: e.message });
-    }
-  });
-
   // Vite middleware for development / static serving for production
+  const isDevScript =
+    process.env.npm_lifecycle_event === "dev" ||
+    process.env.NODE_ENV === "development";
+
   const isRunningAsBundle =
     typeof __filename !== "undefined" &&
     (__filename.endsWith(".cjs") || __filename.includes("dist"));
 
-  const isDevMode =
-    process.env.npm_lifecycle_event === "dev" &&
-    process.env.NODE_ENV !== "production" &&
-    !isRunningAsBundle;
+  const isProduction =
+    !isDevScript &&
+    (isRunningAsBundle ||
+      process.env.NODE_ENV === "production" ||
+      Boolean(process.env.K_SERVICE) ||
+      Boolean(process.env.K_REVISION) ||
+      process.env.npm_lifecycle_event === "start" ||
+      fs.existsSync(path.join(process.cwd(), "dist", "index.html")));
 
-  if (isDevMode) {
+  if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -378,19 +310,45 @@ Return a strictly valid JSON response with this structure:
     }
   });
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  const activeServers: any[] = [];
+
+  // 1. Primary listener: port 3000 (standard for local dev and AI Studio reverse proxy)
+  const primaryServer = app.listen(3000, "0.0.0.0", () => {
+    console.log(`Primary server running on http://0.0.0.0:3000`);
+  });
+  activeServers.push(primaryServer);
+
+  primaryServer.on("error", (err: any) => {
+    console.error("Primary server listener error on port 3000:", err);
   });
 
-  server.on("error", (err: any) => {
-    console.error(`Server listener error on port ${PORT}:`, err);
-  });
+  // 2. Auxiliary listener: process.env.PORT for Cloud Run direct ingress / health checks
+  const cloudRunPort = process.env.PORT ? parseInt(process.env.PORT, 10) : NaN;
+  if (!isNaN(cloudRunPort) && cloudRunPort > 0 && cloudRunPort !== 3000) {
+    try {
+      const cloudRunServer = app.listen(cloudRunPort, "0.0.0.0", () => {
+        console.log(`Cloud Run ingress server listening on http://0.0.0.0:${cloudRunPort}`);
+      });
+      activeServers.push(cloudRunServer);
+
+      cloudRunServer.on("error", (err: any) => {
+        // In environments where an upstream proxy (like nginx on 8080) is already listening,
+        // EADDRINUSE is expected and traffic routes to port 3000 instead.
+        console.log(`Port ${cloudRunPort} listener info: ${err.code || err.message}`);
+      });
+    } catch (auxErr) {
+      console.log("Auxiliary Cloud Run listener caught error:", auxErr);
+    }
+  }
 
   const shutdown = () => {
-    console.log("Shutting down server instance gracefully...");
-    server.close(() => {
-      process.exit(0);
-    });
+    console.log("Shutting down server instances gracefully...");
+    for (const s of activeServers) {
+      try {
+        s.close();
+      } catch (e) {}
+    }
+    process.exit(0);
   };
 
   process.on("SIGTERM", shutdown);

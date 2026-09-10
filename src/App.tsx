@@ -68,20 +68,6 @@ export default function App() {
     window.addEventListener('force-logout', handleForceLogout);
     window.addEventListener('database-not-found', handleDatabaseNotFound);
 
-    // Sync shared server-side spreadsheetId if available across distributed browsers
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(data => {
-        if (data?.spreadsheetId && data.spreadsheetId !== 'local-storage-db') {
-          const currentLocal = localStorage.getItem('erp_spreadsheet_id');
-          if (!currentLocal || currentLocal === 'local-storage-db') {
-            localStorage.setItem('erp_spreadsheet_id', data.spreadsheetId);
-            setSpreadsheetId(data.spreadsheetId);
-          }
-        }
-      })
-      .catch(() => {});
-
     const unsubscribe = initAuth(
       (u, t) => {
         setUser(u);

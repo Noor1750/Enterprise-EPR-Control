@@ -62,8 +62,7 @@ export interface UserSecurityScope {
 
 export const SUPER_ADMIN_EMAILS = [
   'noor.alam1750@gmail.com',
-  'smltrimsbd@gmail.com',
-  'djmamun663@gmail.com'
+  'smltrimsbd@gmail.com'
 ];
 
 export const ALL_SYSTEM_MODULES = [
@@ -266,11 +265,7 @@ export function parseUserSecurityScope(row: string[] | undefined, currentUserEma
         ...DEFAULT_ADMIN_SCOPE,
         username: currentUserEmail || DEFAULT_ADMIN_SCOPE.username,
         email: currentUserEmail || DEFAULT_ADMIN_SCOPE.email,
-        employeeName: emailLower === 'noor.alam1750@gmail.com' 
-          ? 'Md. Noor Alam' 
-          : emailLower === 'djmamun663@gmail.com'
-          ? 'Mamunur Rashid'
-          : `Admin (${getCompanyName()})`
+        employeeName: emailLower === 'noor.alam1750@gmail.com' ? 'Md. Noor Alam' : `Admin (${getCompanyName()})`
       };
     }
     const cleanEmail = currentUserEmail || '';
@@ -1009,7 +1004,6 @@ export function formatEmailToName(email: string): string {
   if (!email) return 'User';
   if (email.toLowerCase() === 'noor.alam1750@gmail.com') return 'Md. Noor Alam';
   if (email.toLowerCase() === 'smltrimsbd@gmail.com') return `Admin (${getCompanyName()})`;
-  if (email.toLowerCase() === 'djmamun663@gmail.com') return 'Mamunur Rashid';
   
   const localPart = email.split('@')[0] || '';
   const cleanStr = localPart.replace(/\d+$/, '').replace(/[._-]+/g, ' ').trim();

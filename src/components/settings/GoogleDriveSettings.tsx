@@ -99,13 +99,6 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
 
     setShowLinkModal(false);
     localStorage.setItem('erp_spreadsheet_id', trimmed);
-    try {
-      fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spreadsheetId: trimmed })
-      }).catch(() => {});
-    } catch (e) {}
     setStatusMessage({ text: `Switched database to Google Sheet: ${trimmed}. Reloading...`, type: 'success' });
     setTimeout(() => {
       window.location.reload();
@@ -136,13 +129,6 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
       const newId = await createSpreadsheet();
       if (newId && newId !== 'local-storage-db') {
         localStorage.setItem('erp_spreadsheet_id', newId);
-        try {
-          fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ spreadsheetId: newId })
-          }).catch(() => {});
-        } catch (e) {}
         setStatusMessage({ 
           text: `Successfully created new database in Google Drive (ID: ${newId}). Reloading application...`, 
           type: 'success' 
