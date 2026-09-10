@@ -140,6 +140,46 @@
         }
       },
       "required": ["userEmail", "action", "timestamp"]
+    },
+    "erpTable": {
+      "title": "ERP Database Table",
+      "description": "Dataset collection representing an individual ERP operational table",
+      "type": "object",
+      "properties": {
+        "tableName": {
+          "type": "string",
+          "description": "Name of the ERP table"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "User email who performed update"
+        }
+      },
+      "required": ["tableName", "updatedAt"]
+    },
+    "erpConfig": {
+      "title": "ERP System Configuration",
+      "description": "Global configuration including master Google Spreadsheet ID and database owner",
+      "type": "object",
+      "properties": {
+        "spreadsheetId": {
+          "type": "string",
+          "description": "Active Google Spreadsheet ID"
+        },
+        "owner": {
+          "type": "string",
+          "description": "Owner email address"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["owner", "updatedAt"]
     }
   },
   "firestore": {
@@ -158,6 +198,14 @@
     "/auditLogs/{logId}": {
       "schema": "auditLog",
       "description": "System and security audit records"
+    },
+    "/erp_databases/{databaseId}/tables/{tableName}": {
+      "schema": "erpTable",
+      "description": "Multi-user live ERP data tables keyed by database owner smltrimsbd@gmail.com"
+    },
+    "/erp_config/{configId}": {
+      "schema": "erpConfig",
+      "description": "Global configuration settings such as Google Sheets linkage"
     }
   }
 }

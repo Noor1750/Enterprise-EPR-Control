@@ -73,5 +73,20 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update, delete: if isSuperAdmin();
     }
+
+    // Shared ERP Database for smltrimsbd@gmail.com (Live multi-user environments: Netlify, Firebase, GitHub)
+    match /erp_databases/{databaseId}/tables/{tableName} {
+      allow read, write: if true;
+    }
+
+    // Global ERP Configuration (Spreadsheet ID & Database Owner)
+    match /erp_config/{configId} {
+      allow read, write: if true;
+    }
+
+    // Lightweight Cross-Client Sync Pulse
+    match /erp_sync/{docId} {
+      allow read, write: if true;
+    }
   }
 }

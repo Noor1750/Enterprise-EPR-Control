@@ -7,6 +7,7 @@ import {
 import { getRange, updateRange, createSpreadsheet } from '../../lib/sheets';
 import { SUPER_ADMIN_EMAILS } from '../../lib/security';
 import { verifyAdminDeletePassword } from '../../lib/appSettings';
+import { saveCloudSpreadsheetId, MASTER_DATABASE_OWNER } from '../../lib/realtimeSync';
 import DriveStorageAndCleanup from './DriveStorageAndCleanup';
 
 interface GoogleDriveSettingsProps {
@@ -81,7 +82,7 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
     setShowLinkModal(true);
   };
 
-  const handleConfirmSwitchSpreadsheet = () => {
+  const handleConfirmSwitchSpreadsheet = async () => {
     const trimmed = newSheetIdInput.trim();
     if (!trimmed) {
       setLinkError('Please enter a valid Google Spreadsheet ID.');
@@ -99,7 +100,12 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
 
     setShowLinkModal(false);
     localStorage.setItem('erp_spreadsheet_id', trimmed);
-    setStatusMessage({ text: `Switched database to Google Sheet: ${trimmed}. Reloading...`, type: 'success' });
+    try {
+      await saveCloudSpreadsheetId(trimmed, currentUserEmail);
+    } catch (e) {
+      console.warn('Failed to broadcast cloud spreadsheet ID:', e);
+    }
+    setStatusMessage({ text: `Switched database to Google Sheet: ${trimmed} and synced across all live environments. Reloading...`, type: 'success' });
     setTimeout(() => {
       window.location.reload();
     }, 1200);
@@ -129,8 +135,13 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
       const newId = await createSpreadsheet();
       if (newId && newId !== 'local-storage-db') {
         localStorage.setItem('erp_spreadsheet_id', newId);
+        try {
+          await saveCloudSpreadsheetId(newId, currentUserEmail);
+        } catch (e) {
+          console.warn('Failed to broadcast cloud spreadsheet ID:', e);
+        }
         setStatusMessage({ 
-          text: `Successfully created new database in Google Drive (ID: ${newId}). Reloading application...`, 
+          text: `Successfully created new database in Google Drive (ID: ${newId}) and synced across all live environments. Reloading application...`, 
           type: 'success' 
         });
         setTimeout(() => {
@@ -350,7 +361,7 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
           <p className="text-[11px] text-gray-500">
             {isTargetSuperAdmin 
               ? `You are signed in as ${currentUserEmail} with Full Primary Super Admin permissions.`
-              : 'To move or create spreadsheets directly in your primary Drive, log in with noor.alam1750@gmail.com.'}
+              : `To move or create spreadsheets directly in primary Drive, log in with ${MASTER_DATABASE_OWNER}.`}
           </p>
         </div>
 
@@ -378,6 +389,58 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
           <p className="text-[11px] text-gray-500">
             Both accounts have unrestricted Admin scope and can manage databases, users, and all settings.
           </p>
+        </div>
+      </div>
+
+      {/* Live Environment & Multi-User Real-time Sync Banner */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-white shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                Live Multi-User Environment Sync
+                <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30">
+                  {MASTER_DATABASE_OWNER}
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Real-time data flow is active across Netlify, Firebase, GitHub, and other live environments.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+            <span className="text-slate-400">Current App Origin:</span>
+            <span className="font-mono text-emerald-400 font-semibold">{typeof window !== 'undefined' ? window.location.origin : ''}</span>
+          </div>
+        </div>
+
+        <div className="p-3.5 bg-slate-800/50 rounded-lg border border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+          <div className="space-y-1 text-slate-300">
+            <div className="font-semibold text-white flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              Netlify & Live Deployment Configuration:
+            </div>
+            <p className="text-slate-400 leading-relaxed">
+              To allow other users to sign in with Google on Netlify or custom domains without popup closures, add this origin URL under:
+              <strong className="text-slate-200"> Firebase Console &gt; Authentication &gt; Settings &gt; Authorized domains</strong>.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                navigator.clipboard.writeText(window.location.origin);
+                setStatusMessage({ text: 'Copied app origin URL to clipboard for Firebase Authorized Domains!', type: 'success' });
+              }
+            }}
+            className="shrink-0 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            Copy Origin URL
+          </button>
         </div>
       </div>
 

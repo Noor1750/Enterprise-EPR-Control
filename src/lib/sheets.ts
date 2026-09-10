@@ -1,10 +1,16 @@
 import { getAccessToken } from './firebase';
 import { safeJsonParse, safeResponseJson } from './safeJson';
+import { 
+  syncTableToCloud, 
+  fetchTableFromCloud, 
+  saveCloudSpreadsheetId, 
+  MASTER_DATABASE_OWNER 
+} from './realtimeSync';
 
 const BASE_URL = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 // Default initial data for local storage database
-const DEFAULT_LOCAL_DB: Record<string, string[][]> = {
+export const DEFAULT_LOCAL_DB: Record<string, string[][]> = {
   Users: [
     ['Username', 'Password_Hash', 'Role', 'Status', 'Access_Level', 'Supervisor_Name', 'Access_Limit_Type', 'Assigned_Employee_IDs', 'Assigned_Department', 'Employee_ID', 'Employee_Name', 'Input_Permissions'],
     ['smltrimsbd@gmail.com', 'Samia@628', 'Admin', 'Active', 'All', '', 'all', '', '', 'ADMIN-001', 'Admin (SML Trims BD)', 'all'],
@@ -474,10 +480,22 @@ function getLocalSheet(sheetName: string): string[][] {
   const initial = DEFAULT_LOCAL_DB[cleanName] || [];
   localStorage.setItem(`erp_db_${cleanName}`, JSON.stringify(initial));
   memoryDbCache.set(cleanName, initial);
+
+  // Trigger background sync with Firestore cloud database
+  fetchTableFromCloud(cleanName).then(cloudRows => {
+    if (cloudRows && Array.isArray(cloudRows) && cloudRows.length > 0) {
+      memoryDbCache.set(cleanName, cloudRows);
+      try {
+        localStorage.setItem(`erp_db_${cleanName}`, JSON.stringify(cloudRows));
+      } catch (_) {}
+      notifyDbUpdated(cleanName);
+    }
+  }).catch(() => {});
+
   return initial;
 }
 
-function setLocalSheet(sheetName: string, data: string[][]): void {
+export function setLocalSheet(sheetName: string, data: string[][]): void {
   const cleanName = sheetName.split('!')[0].trim();
   memoryDbCache.set(cleanName, data);
   try {
@@ -485,6 +503,8 @@ function setLocalSheet(sheetName: string, data: string[][]): void {
   } catch (e) {
     console.warn('Local storage write warning:', e);
   }
+  // Seamlessly persist to Firestore Cloud for smltrimsbd@gmail.com
+  syncTableToCloud(cleanName, data).catch(() => {});
 }
 
 // Debounced event dispatching to avoid micro-task UI freezing during batch operations
@@ -596,6 +616,9 @@ export async function createSpreadsheet(): Promise<string> {
       }
       return 'local-storage-db';
     }
+
+    // Persist new spreadsheet ID to Firestore cloud config for smltrimsbd@gmail.com
+    saveCloudSpreadsheetId(spreadsheetId).catch(err => console.warn('Could not save spreadsheet ID to cloud:', err));
 
     // Initialize headers and seed data
     const headers = [

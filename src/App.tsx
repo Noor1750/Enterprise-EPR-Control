@@ -11,7 +11,8 @@ import {
   logout, 
   setAccessToken 
 } from './lib/firebase';
-import { createSpreadsheet, getRange, appendRow } from './lib/sheets';
+import { createSpreadsheet, getRange, appendRow, DEFAULT_LOCAL_DB } from './lib/sheets';
+import { initRealtimeCloudDatabase, getCloudSpreadsheetId } from './lib/realtimeSync';
 import Layout from './components/Layout';
 import EnterpriseLogin from './components/auth/EnterpriseLogin';
 import AuthStatusScreens from './components/auth/AuthStatusScreens';
@@ -48,7 +49,7 @@ export default function App() {
   const [userAccessLevels, setUserAccessLevels] = useState<string[]>([]);
   const [userSecurityScope, setUserSecurityScope] = useState<UserSecurityScope>(DEFAULT_ADMIN_SCOPE);
 
-  // Load and subscribe to Firebase Auth state
+  // Load and subscribe to Firebase Auth state & Real-time Cloud Sync
   useEffect(() => {
     const handleForceLogout = () => {
       logout().then(() => {
@@ -60,15 +61,41 @@ export default function App() {
     };
 
     const handleDatabaseNotFound = () => {
-      console.warn('Google Sheet was not found or inaccessible, seamlessly using local storage database.');
-      localStorage.setItem('erp_spreadsheet_id', 'local-storage-db');
-      setSpreadsheetId('local-storage-db');
+      console.warn('Google Sheet was temporarily inaccessible, seamlessly serving real-time cloud database.');
     };
 
     window.addEventListener('force-logout', handleForceLogout);
     window.addEventListener('database-not-found', handleDatabaseNotFound);
 
-    const unsubscribe = initAuth(
+    // 1. Initialize Realtime Cloud Database for smltrimsbd@gmail.com
+    const unsubscribeCloudSync = initRealtimeCloudDatabase({
+      onTableUpdated: (sheetName) => {
+        window.dispatchEvent(new CustomEvent('erp-db-updated', { detail: { sheetName } }));
+      },
+      onSpreadsheetIdUpdated: (cloudSheetId) => {
+        if (cloudSheetId && cloudSheetId !== 'local-storage-db') {
+          setSpreadsheetId(prev => {
+            if (prev !== cloudSheetId) {
+              localStorage.setItem('erp_spreadsheet_id', cloudSheetId);
+              return cloudSheetId;
+            }
+            return prev;
+          });
+        }
+      },
+      initialSeedData: DEFAULT_LOCAL_DB
+    });
+
+    // 2. Fetch active cloud spreadsheet ID if not present in local storage
+    getCloudSpreadsheetId().then(cloudSheetId => {
+      if (cloudSheetId && cloudSheetId !== 'local-storage-db') {
+        localStorage.setItem('erp_spreadsheet_id', cloudSheetId);
+        setSpreadsheetId(cloudSheetId);
+      }
+    }).catch(() => {});
+
+    // 3. Initialize Firebase Auth
+    const unsubscribeAuth = initAuth(
       (u, t) => {
         setUser(u);
         setToken(t);
@@ -84,7 +111,8 @@ export default function App() {
     );
 
     return () => {
-      unsubscribe();
+      unsubscribeAuth();
+      unsubscribeCloudSync();
       window.removeEventListener('force-logout', handleForceLogout);
       window.removeEventListener('database-not-found', handleDatabaseNotFound);
     };
