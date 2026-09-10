@@ -254,22 +254,17 @@ Return a strictly valid JSON response with this structure:
   });
 
   // Vite middleware for development / static serving for production
-  const isDevScript =
-    process.env.npm_lifecycle_event === "dev" ||
-    process.env.NODE_ENV === "development";
-
-  const isRunningAsBundle =
+  const isBundle =
     typeof __filename !== "undefined" &&
     (__filename.endsWith(".cjs") || __filename.includes("dist"));
+  const hasDist = fs.existsSync(path.join(process.cwd(), "dist", "index.html"));
+  const isExplicitDev = process.env.npm_lifecycle_event === "dev";
 
   const isProduction =
-    !isDevScript &&
-    (isRunningAsBundle ||
-      process.env.NODE_ENV === "production" ||
-      Boolean(process.env.K_SERVICE) ||
-      Boolean(process.env.K_REVISION) ||
-      process.env.npm_lifecycle_event === "start" ||
-      fs.existsSync(path.join(process.cwd(), "dist", "index.html")));
+    isBundle ||
+    process.env.NODE_ENV === "production" ||
+    (!isExplicitDev && hasDist) ||
+    Boolean(process.env.K_SERVICE && !process.env.K_SERVICE.includes("-dev-"));
 
   if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
@@ -310,44 +305,20 @@ Return a strictly valid JSON response with this structure:
     }
   });
 
-  const activeServers: any[] = [];
-
-  // 1. Primary listener: port 3000 (standard for local dev and AI Studio reverse proxy)
-  const primaryServer = app.listen(3000, "0.0.0.0", () => {
-    console.log(`Primary server running on http://0.0.0.0:3000`);
-  });
-  activeServers.push(primaryServer);
-
-  primaryServer.on("error", (err: any) => {
-    console.error("Primary server listener error on port 3000:", err);
+  // Listen strictly on port 3000 behind container reverse proxy
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 
-  // 2. Auxiliary listener: process.env.PORT for Cloud Run direct ingress / health checks
-  const cloudRunPort = process.env.PORT ? parseInt(process.env.PORT, 10) : NaN;
-  if (!isNaN(cloudRunPort) && cloudRunPort > 0 && cloudRunPort !== 3000) {
-    try {
-      const cloudRunServer = app.listen(cloudRunPort, "0.0.0.0", () => {
-        console.log(`Cloud Run ingress server listening on http://0.0.0.0:${cloudRunPort}`);
-      });
-      activeServers.push(cloudRunServer);
-
-      cloudRunServer.on("error", (err: any) => {
-        // In environments where an upstream proxy (like nginx on 8080) is already listening,
-        // EADDRINUSE is expected and traffic routes to port 3000 instead.
-        console.log(`Port ${cloudRunPort} listener info: ${err.code || err.message}`);
-      });
-    } catch (auxErr) {
-      console.log("Auxiliary Cloud Run listener caught error:", auxErr);
-    }
-  }
+  server.on("error", (err: any) => {
+    console.error(`Server listener error on port ${PORT}:`, err);
+  });
 
   const shutdown = () => {
-    console.log("Shutting down server instances gracefully...");
-    for (const s of activeServers) {
-      try {
-        s.close();
-      } catch (e) {}
-    }
+    console.log("Shutting down server instance gracefully...");
+    try {
+      server.close();
+    } catch (e) {}
     process.exit(0);
   };
 
