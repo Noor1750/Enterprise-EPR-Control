@@ -9,6 +9,7 @@ import { SUPER_ADMIN_EMAILS } from '../../lib/security';
 import { verifyAdminDeletePassword } from '../../lib/appSettings';
 import { saveCloudSpreadsheetId, MASTER_DATABASE_OWNER } from '../../lib/realtimeSync';
 import DriveStorageAndCleanup from './DriveStorageAndCleanup';
+import LiveDeploymentDiagnostic from './LiveDeploymentDiagnostic';
 
 interface GoogleDriveSettingsProps {
   spreadsheetId: string;
@@ -556,6 +557,9 @@ export default function GoogleDriveSettings({ spreadsheetId, user }: GoogleDrive
           </div>
         </div>
       </div>
+
+      {/* LIVE DEPLOYMENT & REALTIME CONNECTIVITY DIAGNOSTIC (NETLIFY, FIREBASE, GITHUB) */}
+      <LiveDeploymentDiagnostic spreadsheetId={spreadsheetId} userEmail={currentUserEmail} />
 
       {/* GOOGLE DRIVE STORAGE VISIBILITY & HISTORICAL DATA CLEANUP */}
       <DriveStorageAndCleanup spreadsheetId={spreadsheetId} user={user} />

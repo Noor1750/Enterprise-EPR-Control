@@ -667,62 +667,6 @@ export default function ContactAndPortfolio({ spreadsheetId, user, userSecurityS
               </div>
             </div>
 
-            {/* Featured Projects Preview */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-[#6366F1] font-mono text-xs font-bold uppercase tracking-widest mb-1">
-                    Portfolio Spotlights
-                  </div>
-                  <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                    Featured Systems & Deployments
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setActiveTab('projects')}
-                  className="text-xs font-semibold text-[#818CF8] hover:text-white flex items-center gap-1 transition"
-                >
-                  <span>Explore Portfolio</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {DEFAULT_PORTFOLIO_ITEMS.slice(0, 3).map(proj => (
-                  <div
-                    key={proj.id}
-                    onClick={() => setSelectedProject(proj)}
-                    className="rounded-3xl bg-[#111422] border border-slate-800/80 overflow-hidden hover:border-slate-700 transition duration-200 group cursor-pointer flex flex-col"
-                  >
-                    <div className="h-48 overflow-hidden relative">
-                      <img
-                        src={proj.imageUrl}
-                        alt={proj.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white border border-white/10">
-                        {proj.category}
-                      </div>
-                    </div>
-                    <div className="p-6 space-y-3 flex-1 flex flex-col justify-between">
-                      <div>
-                        <h3 className="text-base font-bold text-white group-hover:text-[#818CF8] transition">
-                          {proj.title}
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">
-                          {proj.description}
-                        </p>
-                      </div>
-                      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-medium text-[#818CF8]">
-                        <span>View Project Details</span>
-                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Quick Let's Talk CTA Banner */}
             <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-r from-[#121524] via-[#1B1E38] to-[#121524] border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-6 text-center sm:text-left">
               <div className="space-y-2">

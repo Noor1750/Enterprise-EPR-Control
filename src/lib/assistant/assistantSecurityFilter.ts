@@ -216,3 +216,11 @@ export function getAssistantAuditLogs(): AssistantAuditEntry[] {
     return [];
   }
 }
+
+export function clearAssistantAuditLogs(): void {
+  try {
+    localStorage.removeItem('sml_assistant_audit_logs');
+  } catch (err) {
+    console.warn('Could not clear assistant audit logs:', err);
+  }
+}

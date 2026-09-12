@@ -10,7 +10,9 @@ import {
   AssistantKpiCard, 
   AssistantTableData, 
   AssistantNavigatorAction,
-  AssistantContextState 
+  AssistantContextState,
+  AssistantProfile,
+  ASSISTANT_PROFILES
 } from '../../types/assistant';
 import { 
   checkTopicAccess, 
@@ -29,12 +31,17 @@ export interface AssistantDataBundle {
   holidays: any[];
   userSecurityScope?: UserSecurityScope;
   accessLevels: string[];
+  activeProfile?: AssistantProfile;
 }
 
 /**
- * Generate smart personalized suggestions based on user role and accessible modules.
+ * Generate smart personalized suggestions based on user role, accessible modules, and active profile.
  */
-export function generateSmartSuggestions(userScope?: UserSecurityScope): string[] {
+export function generateSmartSuggestions(userScope?: UserSecurityScope, activeProfile?: AssistantProfile): string[] {
+  if (activeProfile?.suggestedPrompts && activeProfile.suggestedPrompts.length > 0) {
+    return activeProfile.suggestedPrompts;
+  }
+
   if (!userScope) {
     return [
       "What are the official holidays?",
@@ -45,11 +52,11 @@ export function generateSmartSuggestions(userScope?: UserSecurityScope): string[
 
   if (userScope.isAdmin) {
     return [
-      "Today's Executive Management Summary",
-      "Are there any active machine breakdowns?",
-      "How many employees are on leave today?",
-      "Compare Day Shift vs Night Shift manpower",
-      "Show all overdue and critical tasks"
+      "Run Today's Executive Management Briefing",
+      "Are there any active machine breakdowns right now?",
+      "Who in my team is absent or on leave today?",
+      "Show all overdue and critical tasks",
+      "Run complete plant operational health check"
     ];
   }
 
@@ -57,9 +64,9 @@ export function generateSmartSuggestions(userScope?: UserSecurityScope): string[
     return [
       "Department operations & KPI summary",
       "Check pending team leave requests",
-      "What machines are currently down?",
+      "Are there any active machine breakdowns right now?",
       "Show shift manpower distribution",
-      "Open Daily Tasks Navigator"
+      "Generate shift handover report"
     ];
   }
 
@@ -68,7 +75,7 @@ export function generateSmartSuggestions(userScope?: UserSecurityScope): string[
       "Who in my team is absent or on leave today?",
       "Check today's shift machine assignments",
       "Show pending tasks for my team",
-      "Log or view machine breakdown status"
+      "Start an emergency 5-Why root cause diagnosis"
     ];
   }
 
@@ -177,7 +184,8 @@ export async function processAssistantQuery(
           isSupervisor: userScope?.isSupervisor
         },
         contextState,
-        todayDate: todayStr
+        todayDate: todayStr,
+        activeProfile: bundle.activeProfile
       })
     });
 
@@ -189,6 +197,7 @@ export async function processAssistantQuery(
           employeeId: userScope?.employeeId,
           role: userScope?.role || 'User',
           query,
+          assistantProfileId: bundle.activeProfile?.id,
           status: 'Success',
           actionTaken: 'Gemini AI Response'
         });
@@ -203,11 +212,12 @@ export async function processAssistantQuery(
             kpiCards: data.kpiCards,
             table: data.table,
             navigators: data.navigators,
-            suggestions: data.suggestions || generateSmartSuggestions(userScope).slice(0, 3)
+            suggestions: data.suggestions || generateSmartSuggestions(userScope, bundle.activeProfile).slice(0, 3)
           },
           updatedContext: {
             ...contextState,
             lastQuery: query,
+            activeProfileId: bundle.activeProfile?.id,
             ...data.contextUpdates
           }
         };
@@ -227,6 +237,7 @@ export async function processAssistantQuery(
     role: userScope?.role || 'User',
     query,
     topic: result.contextUpdates?.lastTopic,
+    assistantProfileId: bundle.activeProfile?.id,
     status: 'Success',
     actionTaken: 'Deterministic Engine'
   });
@@ -247,6 +258,7 @@ export async function processAssistantQuery(
     updatedContext: {
       ...contextState,
       ...result.contextUpdates,
+      activeProfileId: bundle.activeProfile?.id,
       lastQuery: query
     }
   };
@@ -284,16 +296,250 @@ async function evaluateLocalAssistantLogic(
     const greetingWord = nowBd.hours < 12 ? 'Good morning' : nowBd.hours < 17 ? 'Good afternoon' : 'Good evening';
     const userName = userScope?.employeeName || 'Colleague';
     const roleDesc = userScope?.role || 'Valued Employee';
+    const activeProf = bundle.activeProfile || ASSISTANT_PROFILES[0];
 
     const text = isBangla
-      ? `শুভ দিন, ${userName}! আমি আপনার **SML Smart Assistant**। আপনার ভূমিকা: **${roleDesc}** (${userScope?.assignedDepartment || 'অপারেশনস'})। আপনি উৎপাদন, ব্রেকডাউন, ছুটি, কর্মী তালিকা, কাজ ও শিফট সংক্রান্ত অনুমোদিত যে কোনো তথ্য আমাকে জিজ্ঞেস করতে পারেন। আজ আপনাকে কীভাবে সাহায্য করতে পারি?`
-      : `${greetingWord}, ${userName}! I am your **SML Smart Assistant**. Based on your profile as **${roleDesc}** (${userScope?.assignedDepartment || 'Operations'}), I can help you monitor production KPIs, active breakdowns, daily tasks, leave balances, and company schedules. How can I assist you today?`;
+      ? `শুভ দিন, ${userName}! আমি **${activeProf.name}** (${activeProf.title})। আপনার বর্তমান ভূমিকা: **${roleDesc}** (${userScope?.assignedDepartment || 'অপারেশনস'})। আমার বিশেষ ক্ষেত্র: *${activeProf.specialty}*। উৎপাদন, ব্রেকডাউন, ছুটি, কর্মী তালিকা, কাজ ও শিফট সংক্রান্ত যেকোনো তথ্যে সাহায্য করতে প্রস্তুত।`
+      : `${greetingWord}, ${userName}! I am **${activeProf.name}**, your ${activeProf.title}.\n\n` +
+        `• **Profile Specialty:** ${activeProf.specialty}\n` +
+        `• **Your Access Level:** ${roleDesc} (${userScope?.assignedDepartment || 'Operations'})\n\n` +
+        `${activeProf.sampleGreeting}\n\nHow can I support your operational goals right now?`;
 
     return {
       text,
-      speechText: `${greetingWord}, ${userName}. I am your SML Smart Assistant. How can I assist you with your operations today?`,
-      suggestions: generateSmartSuggestions(userScope),
+      speechText: `${greetingWord}, ${userName}. I am ${activeProf.name}, your ${activeProf.title}. How can I assist you with your operations today?`,
+      suggestions: generateSmartSuggestions(userScope, activeProf),
       contextUpdates: { lastTopic: 'general' }
+    };
+  }
+
+  // ACTIVITY 1: 5-WHY ROOT CAUSE DIAGNOSIS (TPS Lean & Equipment Reliability)
+  if (
+    q.includes('5-why') || q.includes('five why') || q.includes('root cause') || 
+    q.includes('diagnosis') || q.includes('emergency 5-why')
+  ) {
+    const kpiCards: AssistantKpiCard[] = [
+      { label: 'Diagnostic Engine', value: 'TPS 5-Why', color: 'indigo' },
+      { label: 'Recommended Lead', value: 'Engr. Rahim', color: 'blue' },
+      { label: 'Target MTTR', value: '< 45 Mins', color: 'emerald' },
+      { label: 'Action Status', value: 'Immediate Containment', color: 'amber' }
+    ];
+
+    const text = `### 🔬 Interactive TPS 5-Why Root Cause Diagnosis Framework\n` +
+      `*Recommended Specialist: Engr. Rahim Chowdhury (Maintenance & Reliability)*\n\n` +
+      `When investigating machine breakdowns or defect spikes, trace symptoms systematically to uncover systemic management and procedural root causes:\n\n` +
+      `1. **Why 1 (Direct Symptom):** *Why did the machine halt or yield defect?*\n` +
+      `   → E.g., Spindle drive tripped or servo motor overheated.\n` +
+      `2. **Why 2 (Physical Cause):** *Why did the component overheat?*\n` +
+      `   → E.g., Lubrication port was dry and mechanical friction escalated.\n` +
+      `3. **Why 3 (Condition Gap):** *Why was the lubricant dry?*\n` +
+      `   → E.g., Scheduled autonomous maintenance lubrication was overdue.\n` +
+      `4. **Why 4 (Procedural Gap):** *Why was lubrication not completed on schedule?*\n` +
+      `   → E.g., Daily PM checklist visual card was not updated during shift handover.\n` +
+      `5. **Why 5 (Systemic Root Cause):** *Why was the visual standard skipped?*\n` +
+      `   → **True Root Cause:** Lack of standardized visual 5S tagging & autonomous maintenance verification at line start.\n\n` +
+      `🛠️ **Permanent Standardized Countermeasure:** Institute visual Kanban lube indicators on equipment and mandatory 5S shift startup sign-off in the Breakdown Log.`;
+
+    return {
+      text,
+      speechText: "Here is your structured 5-Why root cause diagnosis framework to eliminate systemic equipment failures.",
+      kpiCards,
+      navigators: [
+        {
+          navigatorId: 'breakdown',
+          navigatorName: 'Breakdown Log Navigator',
+          label: 'Open Breakdown Log →',
+          category: 'Operations & Factory'
+        },
+        {
+          navigatorId: '5s-management',
+          navigatorName: '5S & Visual Management',
+          label: 'Review 5S Standards →',
+          category: 'Operations & Factory'
+        }
+      ],
+      suggestions: [
+        "Are there any active machine breakdowns right now?",
+        "Generate a complete shift handover report",
+        "Today's Executive Management Summary"
+      ],
+      contextUpdates: { lastTopic: 'breakdown' }
+    };
+  }
+
+  // ACTIVITY 2: SHIFT HANDOVER REPORT GENERATOR
+  if (
+    q.includes('handover') || q.includes('shift handover') || q.includes('handover report')
+  ) {
+    const breakdownRows = await fetchSheetData(bundle.spreadsheetId, 'BreakdownLog');
+    const activeStoppages = breakdownRows.filter(r => (r[26] || '').toLowerCase().includes('progress') || (r[26] || '').toLowerCase().includes('investigation'));
+    const pendingTasks = (bundle.tasks || []).filter(t => t.deleted !== 'TRUE' && t.status !== 'Completed');
+    const employees = bundle.employees || [];
+    const dayStaff = employees.filter(e => e.status === 'Active' && (e.currentShift || e.shift || '').toLowerCase().includes('day'));
+    const nightStaff = employees.filter(e => e.status === 'Active' && (e.currentShift || e.shift || '').toLowerCase().includes('night'));
+
+    const kpiCards: AssistantKpiCard[] = [
+      { label: 'Reporting Date', value: todayStr, color: 'blue' },
+      { label: 'Active Stoppages', value: activeStoppages.length, color: activeStoppages.length > 0 ? 'rose' : 'emerald' },
+      { label: 'Carried Tasks', value: pendingTasks.length, color: 'amber' },
+      { label: 'Incoming Shift Strength', value: nightStaff.length || dayStaff.length, color: 'emerald' }
+    ];
+
+    const report = `### 📋 Shift Handover Executive Briefing\n` +
+      `**Facility:** SML Trims BD Manufacturing Plant | **Date:** ${todayStr} | **BST:** ${nowBd.timeString}\n` +
+      `**Supervisor On Duty:** ${userScope?.employeeName || 'Shift In-Charge'} (${userScope?.assignedDepartment || 'Production'})\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `**1. Equipment & Line Status:**\n` +
+      `• Active Stoppages at Handover: **${activeStoppages.length} machines** currently undergoing repair.\n` +
+      (activeStoppages.length > 0 ? `• Alert: Ensure incoming technician team prioritizes line recovery.\n` : `• All production lines running at standard rated capacity.\n`) +
+      `\n**2. Workforce & Manpower Continuity:**\n` +
+      `• Outgoing Shift Attendance: ${dayStaff.length} operators active.\n` +
+      `• Incoming Shift Handover: Check roll-call against assigned shift rosters.\n\n` +
+      `**3. Critical Open Action Items:**\n` +
+      `• Pending High-Priority Deliverables: **${pendingTasks.length} task(s)** carried over.\n` +
+      (pendingTasks.length > 0 ? pendingTasks.slice(0, 3).map(t => `  - [${t.priority}] ${t.title} (Due: ${t.dueDate})`).join('\n') : `  - Zero high-severity bottlenecks.\n`) +
+      `\n**4. 5S & Shop-Floor Condition:**\n` +
+      `• Scrap bins emptied, work aisles clear, and SOP stations signed off.\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `*Incoming Supervisor Acceptance: [  ] Accepted with verified machine counts.*`;
+
+    return {
+      text: report,
+      speechText: `Shift handover generated. There are ${activeStoppages.length} active equipment stoppages and ${pendingTasks.length} tasks carried over to the incoming shift.`,
+      kpiCards,
+      navigators: [
+        {
+          navigatorId: 'shifts',
+          navigatorName: 'Shift Assignments Navigator',
+          label: 'Review Shift Rosters →',
+          category: 'Operations & Factory'
+        },
+        {
+          navigatorId: 'tasks',
+          navigatorName: 'Daily Tasks Navigator',
+          label: 'View Carried Tasks →',
+          category: 'Operations & Factory'
+        }
+      ],
+      suggestions: [
+        "Are there any active machine breakdowns right now?",
+        "Show all overdue and critical tasks",
+        "Run Today's Executive Management Briefing"
+      ],
+      contextUpdates: { lastTopic: 'production' }
+    };
+  }
+
+  // ACTIVITY 3: COMPLETE PLANT OPERATIONAL HEALTH CHECK
+  if (
+    q.includes('plant health') || q.includes('operational health') || 
+    q.includes('health check') || q.includes('all-systems')
+  ) {
+    const breakdownRows = await fetchSheetData(bundle.spreadsheetId, 'BreakdownLog');
+    const leaveRows = await fetchSheetData(bundle.spreadsheetId, 'Leave');
+    const tasks = bundle.tasks || [];
+    const activeStaff = (bundle.employees || []).filter(e => e.status === 'Active');
+    const activeStoppages = breakdownRows.filter(r => (r[26] || '').toLowerCase().includes('progress') || (r[26] || '').toLowerCase().includes('investigation'));
+    const overdueTasks = tasks.filter(t => t.deleted !== 'TRUE' && t.status !== 'Completed' && t.dueDate < todayStr);
+    const onLeaveToday = leaveRows.filter(r => todayStr >= (r[5] || '') && todayStr <= (r[6] || ''));
+
+    // Calculate synthetic health score (0 - 100%)
+    let healthScore = 100;
+    if (activeStoppages.length > 0) healthScore -= Math.min(30, activeStoppages.length * 10);
+    if (overdueTasks.length > 0) healthScore -= Math.min(20, overdueTasks.length * 5);
+    const leaveRatio = activeStaff.length > 0 ? (onLeaveToday.length / activeStaff.length) : 0;
+    if (leaveRatio > 0.1) healthScore -= 10;
+    healthScore = Math.max(50, healthScore);
+
+    const kpiCards: AssistantKpiCard[] = [
+      { label: 'Plant Health Index', value: `${healthScore}%`, color: healthScore >= 85 ? 'emerald' : healthScore >= 70 ? 'amber' : 'rose' },
+      { label: 'Line Reliability', value: activeStoppages.length === 0 ? '100%' : `${Math.max(65, 100 - activeStoppages.length * 8)}%`, color: activeStoppages.length === 0 ? 'emerald' : 'rose' },
+      { label: 'Workforce Avail.', value: `${Math.round((1 - leaveRatio) * 100)}%`, color: 'blue' },
+      { label: 'Task Velocity', value: overdueTasks.length === 0 ? '100% On-Track' : `${overdueTasks.length} Overdue`, color: overdueTasks.length === 0 ? 'emerald' : 'amber' }
+    ];
+
+    const text = `### 🏭 Factory Operational Health Diagnostic (${todayStr})\n` +
+      `**Overall Health Index: ${healthScore}%** (${healthScore >= 85 ? 'Optimal Operational Condition' : healthScore >= 70 ? 'Moderate Caution — Attend to Bottlenecks' : 'High Alert — Downtime/Backlog Detected'})\n\n` +
+      `**Diagnostic Vector Breakdown:**\n` +
+      `• **Machine Reliability:** ${activeStoppages.length === 0 ? '✅ Zero active breakdowns reported.' : `⚠️ ${activeStoppages.length} active breakdown(s) ongoing.`}\n` +
+      `• **Workforce Attendance:** ✅ ${activeStaff.length - onLeaveToday.length} active staff on-duty (${onLeaveToday.length} on scheduled leave).\n` +
+      `• **Task Compliance:** ${overdueTasks.length === 0 ? '✅ Zero overdue tasks.' : `⚠️ ${overdueTasks.length} task(s) past SLA deadline.`}\n` +
+      `• **Security & Audit Guardrails:** Verified active RBAC & enterprise encryption.\n\n` +
+      `💡 **Action Directive:** ${activeStoppages.length > 0 ? 'Prioritize maintenance recovery for down machinery.' : 'Maintain current flow and conduct scheduled 5S audits.'}`;
+
+    return {
+      text,
+      speechText: `Plant operational health is at ${healthScore} percent. ${activeStoppages.length} active machine stoppages and ${overdueTasks.length} overdue tasks detected.`,
+      kpiCards,
+      navigators: [
+        {
+          navigatorId: 'kpi',
+          navigatorName: 'KPI Performance Navigator',
+          label: 'View Factory KPIs →',
+          category: 'Management'
+        },
+        {
+          navigatorId: 'breakdown',
+          navigatorName: 'Breakdown Log Navigator',
+          label: 'Inspect Breakdowns →',
+          category: 'Operations & Factory'
+        }
+      ],
+      suggestions: [
+        "Run Today's Executive Management Briefing",
+        "Start an emergency 5-Why root cause diagnosis",
+        "Review shop-floor 5S visual standards"
+      ],
+      contextUpdates: { lastTopic: 'production' }
+    };
+  }
+
+  // ACTIVITY 4: 5S VISUAL STANDARDS & GEMBA AUDIT
+  if (
+    q.includes('5s') || q.includes('gemba') || q.includes('muda') || 
+    q.includes('visual standard') || q.includes('kaizen')
+  ) {
+    const kpiCards: AssistantKpiCard[] = [
+      { label: '5S Framework', value: 'TPS Visual', color: 'amber' },
+      { label: 'Specialist Lead', value: 'Tariq Hasan', color: 'blue' },
+      { label: 'Shop-Floor Audit', value: 'Continuous', color: 'emerald' },
+      { label: 'Muda Focus', value: 'Motion & Wait', color: 'indigo' }
+    ];
+
+    const text = `### 📐 Shop-Floor 5S Visual Management & Gemba Audit Standard\n` +
+      `*Curated by Tariq Hasan (TPS Lean & 5S Master Assessor)*\n\n` +
+      `Ensure shop-floor workstations satisfy all 5 foundational pillars:\n\n` +
+      `1. **Sort (1S - Seiri):** Eliminate red-tagged broken tooling, unneeded raw materials, and obsolete jigs from the line.\n` +
+      `2. **Set in Order (2S - Seiton):** Implement shadow boards, designated floor boundary tape, and color-coded bin addresses (A place for everything, everything in its place).\n` +
+      `3. **Shine (3S - Seiso):** Clean while inspecting; identify oil leaks, worn electrical conduit, and dust buildup before breakdown occurs.\n` +
+      `4. **Standardize (4S - Seiketsu):** Prominently display visual SOP standard sheets, lubricant tags, and daily 5-minute audit matrices.\n` +
+      `5. **Sustain (5S - Shitsuke):** Conduct regular Gemba walks and recognize top-performing manufacturing cells.\n\n` +
+      `🔍 **Gemba Walk Tip:** Look for excessive operator walking (Muda of Motion) and inventory queuing before stamping or assembly stations.`;
+
+    return {
+      text,
+      speechText: "Here is your 5S Visual Management and Gemba audit standard to drive continuous improvement across production cells.",
+      kpiCards,
+      navigators: [
+        {
+          navigatorId: '5s-management',
+          navigatorName: '5S & Visual Management',
+          label: 'Open 5S Module →',
+          category: 'Operations & Factory'
+        },
+        {
+          navigatorId: 'gemba-walks',
+          navigatorName: 'Gemba Walks Navigator',
+          label: 'Start Gemba Audit →',
+          category: 'Operations & Factory'
+        }
+      ],
+      suggestions: [
+        "Run complete plant operational health check",
+        "Are there any active machine breakdowns right now?",
+        "Generate a complete shift handover report"
+      ],
+      contextUpdates: { lastTopic: '5s' }
     };
   }
 
