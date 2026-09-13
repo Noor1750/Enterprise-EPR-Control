@@ -328,6 +328,13 @@ export const SMART_ACTIVITIES_CATALOG: SmartActivity[] = [
 
 export type VoiceGenderMode = 'auto' | 'female' | 'male';
 
+export interface AssistantProfileCustomization {
+  name?: string;
+  avatarUrl?: string;
+  title?: string;
+  role?: string;
+}
+
 export interface AssistantSettings {
   enabled: boolean;
   activeProfileId: string;
@@ -339,6 +346,10 @@ export interface AssistantSettings {
   selectedVoiceURI?: string;
   voiceGender: VoiceGenderMode; // 'auto' (matches persona gender) | 'female' | 'male'
   assistantName: string;
+  customAssistantName?: string;
+  customAvatarUrl?: string;
+  customTitle?: string;
+  profileOverrides?: Record<string, AssistantProfileCustomization>;
   welcomeMessageCustom?: string;
   languageMode: 'auto' | 'en' | 'bn';
 }
@@ -353,7 +364,8 @@ export const DEFAULT_ASSISTANT_SETTINGS: AssistantSettings = {
   speechPitch: 1.05,
   voiceGender: 'auto',
   assistantName: 'Samia Rahman',
-  languageMode: 'auto'
+  languageMode: 'auto',
+  profileOverrides: {}
 };
 
 export interface AssistantAuditEntry {

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Bot, X, Send, Mic, MicOff, Volume2, VolumeX, Sparkles, 
   Copy, Check, ExternalLink, Settings, RotateCcw, AlertTriangle, 
   MessageSquare, ChevronDown, Clock, Shield, CheckCircle2,
-  Play, Pause, Info, User, Activity, Users, FileText
+  Play, Pause, Info, User, Activity, Users, FileText,
+  Pencil, ShieldCheck, Camera
 } from 'lucide-react';
 import { UserSecurityScope } from '../../lib/security';
 import { 
@@ -15,7 +16,8 @@ import {
   AssistantContextState,
   AssistantProfile,
   ASSISTANT_PROFILES,
-  SmartActivity 
+  SmartActivity,
+  AssistantProfileCustomization
 } from '../../types/assistant';
 import { assistantAudio, VoiceRecognitionState } from '../../lib/assistant/assistantAudio';
 import { 
@@ -28,6 +30,7 @@ import { AssistantProfileDrawer } from './AssistantProfileDrawer';
 import { AssistantActivitiesView } from './AssistantActivitiesView';
 import { AssistantAuditView } from './AssistantAuditView';
 import { AssistantAudioWaveform } from './AssistantAudioWaveform';
+import { AssistantAdminIdentityModal } from './AssistantAdminIdentityModal';
 
 interface SMLSmartAssistantProps {
   userSecurityScope?: UserSecurityScope;
@@ -73,12 +76,51 @@ export default function SMLSmartAssistant({
         return {
           ...DEFAULT_ASSISTANT_SETTINGS,
           ...parsed,
-          voiceGender: parsed.voiceGender || 'auto'
+          voiceGender: parsed.voiceGender || 'auto',
+          profileOverrides: parsed.profileOverrides || {}
         };
       }
     } catch (_) {}
     return DEFAULT_ASSISTANT_SETTINGS;
   });
+
+  // Admin authority check
+  const isAdmin = Boolean(
+    userSecurityScope?.isAdmin || 
+    userSecurityScope?.role === 'Admin' || 
+    userSecurityScope?.role === 'SuperAdmin' ||
+    !userSecurityScope
+  );
+
+  // Admin Identity Customization Modal state
+  const [isAdminIdentityModalOpen, setIsAdminIdentityModalOpen] = useState(false);
+  const [adminTargetProfileId, setAdminTargetProfileId] = useState<string | undefined>(undefined);
+
+  const handleOpenAdminIdentityModal = (targetProfileId?: string) => {
+    setAdminTargetProfileId(targetProfileId || settings.activeProfileId);
+    setIsAdminIdentityModalOpen(true);
+  };
+
+  const handleSaveCustomization = (profileId: string, customization: AssistantProfileCustomization | null) => {
+    setSettings(prev => {
+      const currentOverrides = { ...(prev.profileOverrides || {}) };
+      if (customization) {
+        currentOverrides[profileId] = customization;
+      } else {
+        delete currentOverrides[profileId];
+      }
+
+      const isTargetActive = profileId === prev.activeProfileId;
+      return {
+        ...prev,
+        profileOverrides: currentOverrides,
+        assistantName: isTargetActive && customization?.name ? customization.name : prev.assistantName,
+        customAssistantName: isTargetActive ? customization?.name : prev.customAssistantName,
+        customAvatarUrl: isTargetActive ? customization?.avatarUrl : prev.customAvatarUrl,
+        customTitle: isTargetActive ? customization?.title : prev.customTitle
+      };
+    });
+  };
 
   // Categorized browser voices (Female, Male, All)
   const [categorizedVoices, setCategorizedVoices] = useState<{
@@ -97,9 +139,20 @@ export default function SMLSmartAssistant({
     }
   }, []);
 
-  // Current active assistant profile persona
-  const activeProfile: AssistantProfile = 
+  // Base profile from default catalog
+  const baseProfile = 
     ASSISTANT_PROFILES.find(p => p.id === settings.activeProfileId) || ASSISTANT_PROFILES[0];
+
+  // Current active assistant profile persona (with admin overrides)
+  const activeProfile: AssistantProfile = useMemo(() => {
+    const override = settings.profileOverrides?.[baseProfile.id];
+    return {
+      ...baseProfile,
+      name: override?.name || settings.customAssistantName || baseProfile.name,
+      avatarUrl: override?.avatarUrl || settings.customAvatarUrl || baseProfile.avatarUrl,
+      title: override?.title || settings.customTitle || baseProfile.title
+    };
+  }, [baseProfile, settings.profileOverrides, settings.customAssistantName, settings.customAvatarUrl, settings.customTitle]);
 
   const [contextState, setContextState] = useState<AssistantContextState>({
     activeProfileId: activeProfile.id
@@ -425,6 +478,21 @@ export default function SMLSmartAssistant({
                     >
                       {activeProfile.role}
                     </span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        id="admin-edit-header-assistant-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenAdminIdentityModal(activeProfile.id);
+                        }}
+                        className="p-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition cursor-pointer flex items-center gap-1 text-[10px] font-semibold"
+                        title="Admin: Change Assistant Name & Profile Photo"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                        <span className="hidden sm:inline">Edit</span>
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-slate-400">
                     <span>BST {bdTime.timeString}</span>
@@ -607,6 +675,59 @@ export default function SMLSmartAssistant({
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
+
+                {/* Admin Assistant Identity & Profile Photo Card */}
+                {isAdmin && (
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-indigo-950/40 border border-amber-500/30 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-amber-400" />
+                        <span className="font-bold text-white text-xs">Assistant Identity & Avatar</span>
+                        <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          Admin Authority
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        id="open-admin-identity-settings-btn"
+                        onClick={() => handleOpenAdminIdentityModal(activeProfile.id)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 transition cursor-pointer shadow-sm"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Change Name & Photo</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-2 bg-slate-950/70 rounded-lg border border-slate-800">
+                      <div className="relative shrink-0">
+                        <img
+                          src={activeProfile.avatarUrl}
+                          alt={activeProfile.name}
+                          referrerPolicy="no-referrer"
+                          className="w-10 h-10 rounded-lg object-cover border-2"
+                          style={{ borderColor: activeProfile.auraColor }}
+                        />
+                        <span 
+                          className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border border-slate-950 flex items-center justify-center text-[7px] text-white"
+                          style={{ backgroundColor: activeProfile.auraColor }}
+                        >
+                          ✓
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-white text-xs truncate">{activeProfile.name}</span>
+                          {Boolean(settings.profileOverrides?.[activeProfile.id]) && (
+                            <span className="text-[9px] font-semibold text-amber-300 bg-amber-950/70 border border-amber-700/50 px-1.5 rounded">
+                              Customized
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">{activeProfile.title}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Voice Gender Selection */}
                 <div className="space-y-1.5">
@@ -820,6 +941,9 @@ export default function SMLSmartAssistant({
                   activeProfileId={activeProfile.id}
                   onSelectProfile={handleSelectProfile}
                   voiceEnabled={settings.voiceOutputEnabled}
+                  isAdmin={isAdmin}
+                  onOpenAdminIdentityModal={handleOpenAdminIdentityModal}
+                  profileOverrides={settings.profileOverrides}
                 />
               </div>
             )}
@@ -1057,6 +1181,26 @@ export default function SMLSmartAssistant({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Admin Virtual Assistant Identity & Photo Modal */}
+      {isAdmin && (
+        <AssistantAdminIdentityModal
+          isOpen={isAdminIdentityModalOpen}
+          onClose={() => setIsAdminIdentityModalOpen(false)}
+          settings={settings}
+          onSaveCustomization={handleSaveCustomization}
+          activeProfile={
+            adminTargetProfileId
+              ? {
+                  ...(ASSISTANT_PROFILES.find(p => p.id === adminTargetProfileId) || activeProfile),
+                  name: settings.profileOverrides?.[adminTargetProfileId]?.name || (ASSISTANT_PROFILES.find(p => p.id === adminTargetProfileId) || activeProfile).name,
+                  avatarUrl: settings.profileOverrides?.[adminTargetProfileId]?.avatarUrl || (ASSISTANT_PROFILES.find(p => p.id === adminTargetProfileId) || activeProfile).avatarUrl,
+                  title: settings.profileOverrides?.[adminTargetProfileId]?.title || (ASSISTANT_PROFILES.find(p => p.id === adminTargetProfileId) || activeProfile).title
+                }
+              : activeProfile
+          }
+        />
+      )}
     </>
   );
 }

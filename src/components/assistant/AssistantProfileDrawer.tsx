@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   AssistantProfile, 
-  ASSISTANT_PROFILES 
+  ASSISTANT_PROFILES,
+  AssistantProfileCustomization
 } from '../../types/assistant';
 import { 
   Bot, 
@@ -13,7 +14,9 @@ import {
   Zap, 
   Briefcase,
   Play,
-  RotateCcw
+  RotateCcw,
+  Pencil,
+  ShieldCheck
 } from 'lucide-react';
 import { speakAssistantText, stopSpeechSynthesis } from '../../lib/assistant/assistantAudio';
 
@@ -22,13 +25,19 @@ interface AssistantProfileDrawerProps {
   onSelectProfile: (profile: AssistantProfile) => void;
   onClose?: () => void;
   voiceEnabled: boolean;
+  isAdmin?: boolean;
+  onOpenAdminIdentityModal?: (targetProfileId?: string) => void;
+  profileOverrides?: Record<string, AssistantProfileCustomization>;
 }
 
 export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
   activeProfileId,
   onSelectProfile,
   onClose,
-  voiceEnabled
+  voiceEnabled,
+  isAdmin = false,
+  onOpenAdminIdentityModal,
+  profileOverrides
 }) => {
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [genderFilter, setGenderFilter] = useState<'all' | 'female' | 'male'>('all');
@@ -74,7 +83,21 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
     setTimeout(() => setPlayingVoiceId(null), 4500);
   };
 
-  const filteredProfiles = ASSISTANT_PROFILES.filter(p => {
+  // Merge default profiles with any admin customizations
+  const customizedProfiles = useMemo(() => {
+    return ASSISTANT_PROFILES.map(p => {
+      const override = profileOverrides?.[p.id];
+      if (!override) return p;
+      return {
+        ...p,
+        name: override.name || p.name,
+        avatarUrl: override.avatarUrl || p.avatarUrl,
+        title: override.title || p.title
+      };
+    });
+  }, [profileOverrides]);
+
+  const filteredProfiles = customizedProfiles.filter(p => {
     if (genderFilter === 'all') return true;
     return p.gender === genderFilter;
   });
@@ -89,44 +112,68 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white tracking-tight">Virtual Assistant Profiles & Voices</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-white tracking-tight">Virtual Assistant Profiles & Voices</h2>
+                {isAdmin && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>Admin Controls</span>
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-300">
                 Specialized digital co-pilots with gender-tailored voice synthesis (Female & Male).
               </p>
             </div>
           </div>
 
-          {/* Quick Voice Gender Audition */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              id="test-female-voice-btn"
-              onClick={() => handleQuickTestGender('female')}
-              className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                playingVoiceId === 'test-female'
-                  ? 'bg-rose-600 text-white border-rose-400 shadow-sm animate-pulse'
-                  : 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-200 border-rose-800/60'
-              }`}
-              title="Audition Female TTS Voice"
-            >
-              <Volume2 className="w-3.5 h-3.5 text-rose-400" />
-              <span>Hear Female Voice</span>
-            </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Admin Quick Action to Customize Active Identity */}
+            {isAdmin && onOpenAdminIdentityModal && (
+              <button
+                type="button"
+                id="admin-customize-assistant-btn"
+                onClick={() => onOpenAdminIdentityModal(activeProfileId)}
+                className="px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer bg-gradient-to-r from-amber-600/30 to-amber-500/20 hover:from-amber-600/40 hover:to-amber-500/30 text-amber-200 border-amber-500/40 shadow-sm"
+                title="Change assistant name, title, or profile photo as admin"
+              >
+                <Pencil className="w-3.5 h-3.5 text-amber-400" />
+                <span>Admin: Edit Name & Photo</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              id="test-male-voice-btn"
-              onClick={() => handleQuickTestGender('male')}
-              className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                playingVoiceId === 'test-male'
-                  ? 'bg-blue-600 text-white border-blue-400 shadow-sm animate-pulse'
-                  : 'bg-blue-950/40 hover:bg-blue-900/60 text-blue-200 border-blue-800/60'
-              }`}
-              title="Audition Male TTS Voice"
-            >
-              <Volume2 className="w-3.5 h-3.5 text-blue-400" />
-              <span>Hear Male Voice</span>
-            </button>
+            {/* Quick Voice Gender Audition */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                id="test-female-voice-btn"
+                onClick={() => handleQuickTestGender('female')}
+                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  playingVoiceId === 'test-female'
+                    ? 'bg-rose-600 text-white border-rose-400 shadow-sm animate-pulse'
+                    : 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-200 border-rose-800/60'
+                }`}
+                title="Audition Female TTS Voice"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Hear Female</span>
+              </button>
+
+              <button
+                type="button"
+                id="test-male-voice-btn"
+                onClick={() => handleQuickTestGender('male')}
+                className={`px-2.5 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  playingVoiceId === 'test-male'
+                    ? 'bg-blue-600 text-white border-blue-400 shadow-sm animate-pulse'
+                    : 'bg-blue-950/40 hover:bg-blue-900/60 text-blue-200 border-blue-800/60'
+                }`}
+                title="Audition Male TTS Voice"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-blue-400" />
+                <span>Hear Male</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -137,7 +184,7 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
               type="button"
               id="filter-all-profiles-btn"
               onClick={() => setGenderFilter('all')}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
                 genderFilter === 'all'
                   ? 'bg-blue-600 text-white'
                   : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800'
@@ -149,7 +196,7 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
               type="button"
               id="filter-female-profiles-btn"
               onClick={() => setGenderFilter('female')}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition flex items-center gap-1 ${
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition flex items-center gap-1 cursor-pointer ${
                 genderFilter === 'female'
                   ? 'bg-rose-600 text-white'
                   : 'bg-slate-800/70 text-rose-300 hover:bg-slate-800'
@@ -161,7 +208,7 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
               type="button"
               id="filter-male-profiles-btn"
               onClick={() => setGenderFilter('male')}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition flex items-center gap-1 ${
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition flex items-center gap-1 cursor-pointer ${
                 genderFilter === 'male'
                   ? 'bg-blue-600 text-white'
                   : 'bg-slate-800/70 text-blue-300 hover:bg-slate-800'
@@ -172,7 +219,7 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
           </div>
 
           <span className="text-[11px] text-slate-400">
-            Click "Hear Voice" to audition specific persona tone
+            {isAdmin ? 'Admins can customize names and profile photos on each co-pilot' : 'Click any co-pilot to set as active assistant'}
           </span>
         </div>
       </div>
@@ -182,6 +229,7 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
         {filteredProfiles.map((profile) => {
           const isActive = profile.id === activeProfileId;
           const isPlaying = playingVoiceId === profile.id;
+          const hasCustomization = Boolean(profileOverrides?.[profile.id]);
 
           return (
             <div
@@ -194,13 +242,20 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
                   : 'bg-slate-900/70 hover:bg-slate-900/90 border-slate-800 hover:border-slate-700'
               }`}
             >
-              {/* Active Badge */}
-              {isActive && (
-                <div className="absolute top-3 right-3 flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-700/50 px-2 py-0.5 rounded-full">
-                  <Check className="w-3 h-3" />
-                  <span>Active Assistant</span>
-                </div>
-              )}
+              {/* Badges Container */}
+              <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                {hasCustomization && (
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-950/80 border border-amber-700/50 px-2 py-0.5 rounded-full">
+                    <span>Admin Custom</span>
+                  </div>
+                )}
+                {isActive && (
+                  <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-700/50 px-2 py-0.5 rounded-full">
+                    <Check className="w-3 h-3" />
+                    <span>Active Co-Pilot</span>
+                  </div>
+                )}
+              </div>
 
               {/* Profile Bio & Avatar Header */}
               <div>
@@ -261,7 +316,7 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
                 <button
                   type="button"
                   id={`preview-voice-btn-${profile.id}`}
@@ -277,22 +332,41 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
                   <span>{isPlaying ? 'Voice Playing...' : 'Hear Voice'}</span>
                 </button>
 
-                <button
-                  type="button"
-                  id={`activate-profile-btn-${profile.id}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectProfile(profile);
-                  }}
-                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                    isActive
-                      ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50'
-                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm'
-                  }`}
-                >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>{isActive ? 'Current Co-Pilot' : 'Set as Co-Pilot'}</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {/* Admin Edit Identity Button */}
+                  {isAdmin && onOpenAdminIdentityModal && (
+                    <button
+                      type="button"
+                      id={`admin-edit-identity-btn-${profile.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenAdminIdentityModal(profile.id);
+                      }}
+                      className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border-amber-700/50 transition cursor-pointer"
+                      title="Edit Assistant Name and Profile Photo as Admin"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    id={`activate-profile-btn-${profile.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectProfile(profile);
+                    }}
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50'
+                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm'
+                    }`}
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>{isActive ? 'Current Co-Pilot' : 'Set as Co-Pilot'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -301,3 +375,4 @@ export const AssistantProfileDrawer: React.FC<AssistantProfileDrawerProps> = ({
     </div>
   );
 };
+
