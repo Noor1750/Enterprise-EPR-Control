@@ -27,6 +27,7 @@ import FiveSManagement from './FiveSManagement';
 import WorkAnniversaries from './anniversary/WorkAnniversaries';
 import PerformanceReviews from './performance/PerformanceReviews';
 import ContactAndPortfolio from './contact/ContactAndPortfolio';
+import MachinePlanAchievement from './machinePlan/MachinePlanAchievement';
 import GlobalLoadingScreen from './common/GlobalLoadingScreen';
 import IdleSessionWatcher from './common/IdleSessionWatcher';
 import PerformanceMonitorModal from './common/PerformanceMonitorModal';
@@ -84,7 +85,7 @@ interface LayoutProps {
   userSecurityScope?: UserSecurityScope;
 }
 
-type ModuleType = 'dashboard' | 'tasks' | 'gemba-walks' | '5s-management' | 'directory' | 'promotions' | 'kpi' | 'machine' | 'breakdown' | 'skill' | 'leave' | 'overtime' | 'practices' | 'shifts' | 'orgchart' | 'reports' | 'settings' | 'anniversaries' | 'reviews' | 'contact-portfolio';
+type ModuleType = 'dashboard' | 'tasks' | 'gemba-walks' | '5s-management' | 'directory' | 'promotions' | 'kpi' | 'machine' | 'machine-plan' | 'breakdown' | 'skill' | 'leave' | 'overtime' | 'practices' | 'shifts' | 'orgchart' | 'reports' | 'settings' | 'anniversaries' | 'reviews' | 'contact-portfolio';
 
 export default function Layout({ user, spreadsheetId, onLogout, accessLevels, userSecurityScope }: LayoutProps) {
   const [activeModule, setActiveModule] = useState<ModuleType | 'skill-dashboard'>('dashboard');
@@ -498,6 +499,7 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
 
     { id: 'breakdown', name: 'Breakdown Log', icon: AlertTriangle, moduleName: 'Machine & Skills', category: 'Operations & Factory' },
     { id: 'machine', name: 'Machine Capacity', icon: Wrench, moduleName: 'Machine & Skills', category: 'Operations & Factory' },
+    { id: 'machine-plan', name: 'UEE & Scrap', icon: TrendingUp, moduleName: 'Machine & Skills', category: 'Operations & Factory' },
     { id: 'shifts', name: 'Shift Assignments', icon: Briefcase, moduleName: 'Shift Assignments', category: 'Operations & Factory' },
     { id: 'skill-dashboard', name: 'Skill Matrix', icon: Target, moduleName: 'Machine & Skills', category: 'Operations & Factory' },
 
@@ -611,6 +613,7 @@ export default function Layout({ user, spreadsheetId, onLogout, accessLevels, us
       case 'kpi': return <KPIPerformance spreadsheetId={spreadsheetId} employees={employees} accessLevels={accessLevels} userEmail={user.email || ''} userSecurityScope={userSecurityScope} user={user} />;
       case 'reviews': return <KPIPerformance spreadsheetId={spreadsheetId} employees={employees} accessLevels={accessLevels} userEmail={user.email || ''} userSecurityScope={userSecurityScope} user={user} initialParameter="performance-reviews" />;
       case 'machine': return <MachineCapacity spreadsheetId={spreadsheetId} view="machine" userSecurityScope={userSecurityScope} />;
+      case 'machine-plan': return <MachinePlanAchievement spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope || ({} as any)} user={user} />;
       case 'breakdown': return <BreakdownLog spreadsheetId={spreadsheetId} userSecurityScope={userSecurityScope} />;
       case 'leave': return <LeaveManagement spreadsheetId={spreadsheetId} user={user} userSecurityScope={userSecurityScope} />;
       case 'overtime': return <OvertimeCalendar spreadsheetId={spreadsheetId} user={user} userSecurityScope={userSecurityScope} />;

@@ -26,14 +26,14 @@ export const DEFAULT_LOCAL_DB: Record<string, string[][]> = {
     ['EMP006', 'David Wilson', 'Pattern Maker', 'Cutting', '2022-09-15', 'Pattern Specialist', 'Sarah Connor', '48000', '240', 'Active', '', '+1-555-0111', '+1-555-0112', 'Day Shift', 'A-', 'Floor 1', '', 'Michael Scott', 'M', '40', 'No', '1991-07-14', 'Automatic Rotation', '2026-08-01', 'Day Shift', 'Weekly A/B rotating schedule']
   ],
   MachineCapacity: [
-    ['Brand Name', 'Department', 'Operator Category', 'Process Name', 'Machine Name', 'Standard Unit', 'Specification Per Minutes', 'Standard Speed Per Minutes', 'Utilization %', 'Conversion ratio/UPS', 'Capacity 16 Hours Pcs', 'Capacity 16 Hours Machine Unit', 'Day Shift Manpower Required', 'Night Shift Manpower Required', 'General Shift Manpower Required', 'Manpower Allocation', 'Overtime', 'Capacity with existing manpower Pcs', 'Capacity with Existing manpower Machine Unit', 'Capacity Count', 'Machine No', 'Model Number', 'Serial Number', 'Asset Tag', 'Onboard Date', 'Obsolete Date'],
-    ['CL-326IE', 'RFID', 'A', 'Encoding & Verification', 'CL-326IE', 'Pcs', '1.2', '4200', '90', '1', '600', '1', '1', '1', '0', 'Both Shift', '0', '600', '1', 'Yes', 'MC-RFID-01'],
-    ['ZSM108', 'Woven', 'A', 'High-Speed Weaving', 'ZSM108', 'Mtr', '0.8', '3500', '88', '1', '850', '1', '1', '1', '0', 'Both Shift', '0', '850', '1', 'Yes', 'MC-WOV-02'],
-    ['RIM601H', 'Offset', 'A', 'Multi-Color Offset Printing', 'RIM601H', 'Sheets', '0.5', '5000', '92', '1', '1200', '1', '2', '2', '0', 'Both Shift', '0', '1200', '1', 'Yes', 'MC-OFF-03'],
-    ['Brother', 'Sewing', 'A', 'Lockstitch', 'Single Needle', 'Pcs', '1.5', '4500', '85', '1', '450', '1', '1', '1', '0', 'Both Shift', '0', '400', '1', 'Yes', 'MC-SEW-01'],
-    ['Juki', 'Cutting', 'A', 'Auto Cutter', 'Cutter 5000', 'Pcs', '0.5', '3000', '90', '1', '900', '1', '1', '0', '0', 'One Shift', '0', '900', '1', 'Yes', 'MC-CUT-01'],
-    ['FlexoTech', 'PFL', 'A', 'Label Flexo Printing', 'PFL Flexo 4C', 'Pcs', '1.0', '3800', '85', '1', '750', '1', '1', '1', '0', 'Both Shift', '0', '750', '1', 'Yes', 'MC-PFL-01'],
-    ['PackMaster', 'Packaging', 'B', 'Auto Sealing & Carton Packing', 'Packer P-10', 'Boxes', '2.0', '2500', '90', '1', '500', '1', '1', '1', '0', 'Both Shift', '0', '500', '1', 'Yes', 'MC-PKG-01']
+    ['Brand Name', 'Department', 'Operator Category', 'Process Name', 'Machine Name', 'Standard Unit', 'Specification Per Minutes', 'Standard Speed Per Minutes', 'Utilization %', 'Conversion ratio/UPS', 'Capacity 16 Hours Pcs', 'Capacity 16 Hours Machine Unit', 'Day Shift Manpower Required', 'Night Shift Manpower Required', 'General Shift Manpower Required', 'Manpower Allocation', 'Overtime', 'Capacity with existing manpower Pcs', 'Capacity with Existing manpower Machine Unit', 'Capacity Count', 'Machine No', 'Model Number', 'Serial Number', 'Asset Tag', 'Onboard Date', 'Obsolete Date', 'Calculate UEE'],
+    ['CL-326IE', 'RFID', 'A', 'Encoding & Verification', 'CL-326IE', 'Pcs', '1.2', '4200', '90', '1', '600', '1', '1', '1', '0', 'Both Shift', '0', '600', '1', 'Yes', 'MC-RFID-01', 'CL-326', 'SN-RF-01', 'AST-RF-01', '2023-01-01', '', 'Yes'],
+    ['ZSM108', 'Woven', 'A', 'High-Speed Weaving', 'ZSM108', 'Mtr', '0.8', '3500', '88', '1', '850', '1', '1', '1', '0', 'Both Shift', '0', '850', '1', 'Yes', 'MC-WOV-02', 'ZSM-108', 'SN-WV-02', 'AST-WV-02', '2023-01-01', '', 'Yes'],
+    ['RIM601H', 'Offset', 'A', 'Multi-Color Offset Printing', 'RIM601H', 'Sheets', '0.5', '5000', '92', '1', '1200', '1', '2', '2', '0', 'Both Shift', '0', '1200', '1', 'Yes', 'MC-OFF-03', 'RIM-601H', 'SN-OF-03', 'AST-OF-03', '2023-01-01', '', 'Yes'],
+    ['Brother', 'Sewing', 'A', 'Lockstitch', 'Single Needle', 'Pcs', '1.5', '4500', '85', '1', '450', '1', '1', '1', '0', 'Both Shift', '0', '400', '1', 'Yes', 'MC-SEW-01', 'S-7200C', 'SN-SW-01', 'AST-SW-01', '2023-01-01', '', 'Yes'],
+    ['Juki', 'Cutting', 'A', 'Auto Cutter', 'Cutter 5000', 'Pcs', '0.5', '3000', '90', '1', '900', '1', '1', '0', '0', 'One Shift', '0', '900', '1', 'Yes', 'MC-CUT-01', 'AC-5000', 'SN-CT-01', 'AST-CT-01', '2023-01-01', '', 'Yes'],
+    ['FlexoTech', 'PFL', 'A', 'Label Flexo Printing', 'PFL Flexo 4C', 'Pcs', '1.0', '3800', '85', '1', '750', '1', '1', '1', '0', 'Both Shift', '0', '750', '1', 'Yes', 'MC-PFL-01', 'FT-4C', 'SN-PF-01', 'AST-PF-01', '2023-01-01', '', 'Yes'],
+    ['PackMaster', 'Packaging', 'B', 'Auto Sealing & Carton Packing', 'Packer P-10', 'Boxes', '2.0', '2500', '90', '1', '500', '1', '1', '1', '0', 'Both Shift', '0', '500', '1', 'Yes', 'MC-PKG-01', 'P-10', 'SN-PK-01', 'AST-PK-01', '2023-01-01', '', 'Yes']
   ],
   SkillMatrix: [
     ['ID_No', 'Machine_Job', 'Skill_Level'],
@@ -432,6 +432,74 @@ export const DEFAULT_LOCAL_DB: Record<string, string[][]> = {
       'View_Permission', 'Edit_Permission', 'Assigned_By', 'Assigned_Date', 
       'Updated_By', 'Updated_Date', 'Status'
     ]
+  ],
+  MachinePlanAchievement: [
+    [
+      'Plan_ID', 'Date', 'Department', 'UOM', 'Machine_Model', 
+      'Spec_Speed_H', 'Av_Working_Hrs', 'Total', 'Capacity_Implement_Hrs', 
+      'Plan_Hours', 'Machine_Status', 'Target_Output', 'Actual_Output', 
+      'SKU', 'MO', 'Total_UEE_Pct', 'Remarks', 'Shift', 
+      'Created_By', 'Created_At', 'Updated_By', 'Updated_At'
+    ],
+    [
+      'MPA-20260912-001', '2026-09-12', 'RFID', 'PCS', 'CL-326IE',
+      '4200', '8.0', '8.0', '3780',
+      '8.0', 'Running', '30240', '29800',
+      'SKU-RFID-902', 'MO-2026-0881', '91.5', 'Normal high-speed production run; antenna alignment stable', 'Day Shift',
+      'noor.alam1750@gmail.com', '2026-09-12T08:00:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'
+    ],
+    [
+      'MPA-20260912-002', '2026-09-12', 'Woven', 'Mtr', 'ZSM108',
+      '3500', '8.0', '8.0', '3080',
+      '8.0', 'Running', '24640', '24100',
+      'ST-WOV-441', 'MO-2026-0882', '88.2', 'Jacquard weaving operating smoothly; zero warp yarn breakages', 'Day Shift',
+      'noor.alam1750@gmail.com', '2026-09-12T08:00:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'
+    ],
+    [
+      'MPA-20260912-003', '2026-09-12', 'Offset', 'Sheets', 'RIM601H',
+      '5000', '8.0', '8.0', '4600',
+      '7.5', 'Running', '34500', '33800',
+      'OFF-SHT-102', 'MO-2026-0883', '86.4', 'Plate changeover completed in 30 mins; ink viscosity verified', 'Day Shift',
+      'noor.alam1750@gmail.com', '2026-09-12T08:00:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'
+    ],
+    [
+      'MPA-20260912-004', '2026-09-12', 'Sewing', 'Pcs', 'Single Needle',
+      '4500', '8.0', '8.0', '3825',
+      '8.0', 'Running', '30600', '29500',
+      'SEW-POLO-08', 'MO-2026-0884', '84.8', 'Minor thread tension adjustment during 2nd hour; recovered pace', 'Day Shift',
+      'noor.alam1750@gmail.com', '2026-09-12T08:00:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'
+    ],
+    [
+      'MPA-20260912-005', '2026-09-12', 'Cutting', 'Pcs', 'Cutter 5000',
+      '3000', '8.0', '8.0', '2700',
+      '8.0', 'Running', '21600', '21950',
+      'CUT-DEN-55', 'MO-2026-0885', '93.0', 'Excellent fabric lay throughput; surpassed hourly benchmark', 'Day Shift',
+      'noor.alam1750@gmail.com', '2026-09-12T08:00:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'
+    ],
+    [
+      'MPA-20260912-006', '2026-09-12', 'PFL', 'Pcs', 'PFL Flexo 4C',
+      '3800', '8.0', '8.0', '3230',
+      '8.0', 'Idle', '25840', '14200',
+      'PFL-LBL-12', 'MO-2026-0886', '62.0', 'Material shortage: waiting for care label satin ribbon rolls from warehouse', 'Day Shift',
+      'noor.alam1750@gmail.com', '2026-09-12T08:00:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'
+    ],
+    [
+      'MPA-20260912-007', '2026-09-12', 'Packaging', 'Boxes', 'Packer P-10',
+      '2500', '8.0', '8.0', '2250',
+      '6.0', 'Maintenance', '13500', '8900',
+      'PKG-EXP-03', 'MO-2026-0887', '72.5', 'Scheduled preventive maintenance and carton sealer belt inspection', 'Day Shift',
+      'noor.alam1750@gmail.com', '2026-09-12T08:00:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'
+    ]
+  ],
+  DailyScrapReport: [
+    ['Scrap_ID', 'Date', 'Department', 'UOM', 'Required', 'Used', 'Scrap_Qty', 'Scrap_Pct', 'Remarks', 'Created_By', 'Created_At', 'Updated_By', 'Updated_At'],
+    ['SCR-20260912-001', '2026-09-12', 'Offset', 'Sheets', '35000', '35850', '850', '2.43', 'Setup waste and color calibration trim', 'noor.alam1750@gmail.com', '2026-09-12T08:30:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'],
+    ['SCR-20260912-002', '2026-09-12', 'PFL', 'Mtr', '12000', '12420', '420', '3.50', 'Anilox roll ink wash and splicing scrap', 'noor.alam1750@gmail.com', '2026-09-12T08:30:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'],
+    ['SCR-20260912-003', '2026-09-12', 'Woven', 'Mtr', '8500', '8620', '120', '1.41', 'Warp beam tension adjustment waste', 'noor.alam1750@gmail.com', '2026-09-12T08:30:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'],
+    ['SCR-20260912-004', '2026-09-12', 'RFID', 'Pcs', '45000', '45450', '450', '1.00', 'Antenna chip testing defect rejects', 'noor.alam1750@gmail.com', '2026-09-12T08:30:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'],
+    ['SCR-20260912-005', '2026-09-12', 'Cutting', 'Pcs', '25000', '25600', '600', '2.40', 'Edge trim and die indentation alignment', 'noor.alam1750@gmail.com', '2026-09-12T08:30:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'],
+    ['SCR-20260912-006', '2026-09-12', 'Sewing', 'Pcs', '18000', '18320', '320', '1.78', 'Bobbin tension defect & hem cutting scrap', 'noor.alam1750@gmail.com', '2026-09-12T08:30:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z'],
+    ['SCR-20260912-007', '2026-09-12', 'Packaging', 'Boxes', '1500', '1515', '15', '1.00', 'Corrugated carton corner crush scrap', 'noor.alam1750@gmail.com', '2026-09-12T08:30:00.000Z', 'noor.alam1750@gmail.com', '2026-09-12T17:30:00.000Z']
   ]
 };
 
@@ -596,6 +664,8 @@ export async function createSpreadsheet(): Promise<string> {
           { properties: { title: 'FiveS_CorrectiveActions' } },
           { properties: { title: 'FiveS_Winners' } },
           { properties: { title: 'FiveS_AuditLog' } },
+          { properties: { title: 'MachinePlanAchievement' } },
+          { properties: { title: 'DailyScrapReport' } },
         ]
       })
     });
@@ -646,6 +716,7 @@ export async function createSpreadsheet(): Promise<string> {
       { range: 'FiveS_Winners!A1:O4', values: DEFAULT_LOCAL_DB.FiveS_Winners },
       { range: 'FiveS_AuditLog!A1:K2', values: DEFAULT_LOCAL_DB.FiveS_AuditLog },
       { range: 'UserAdditionalAccess!A1:L1', values: DEFAULT_LOCAL_DB.UserAdditionalAccess },
+      { range: 'DailyScrapReport!A1:M8', values: DEFAULT_LOCAL_DB.DailyScrapReport },
     ];
 
     for (const header of headers) {

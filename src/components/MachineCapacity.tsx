@@ -64,6 +64,7 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
     capacityExistingManpowerPcs: '',
     capacityExistingManpowerMachineUnit: '',
     capacityCount: 'Yes',
+    calculateUee: 'Yes' as 'Yes' | 'No',
     modelNumber: '',
     serialNumber: '',
     assetTag: '',
@@ -256,16 +257,17 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
         calc.existCapPcs.toString(), calc.existCapUnit.toString(),
         mForm.capacityCount,
         mForm.machineNo || (editingMachineIndex !== null ? (machines[editingMachineIndex][20] || '') : `MC-${Date.now().toString().slice(-6)}`),
-        mForm.modelNumber, mForm.serialNumber, mForm.assetTag, mForm.onboardDate, mForm.obsoleteDate
+        mForm.modelNumber, mForm.serialNumber, mForm.assetTag, mForm.onboardDate, mForm.obsoleteDate,
+        mForm.calculateUee || 'Yes'
       ];
 
       const isEdit = editingMachineIndex !== null;
 
       if (isEdit) {
         const row = editingMachineIndex + 2;
-        await updateRange(spreadsheetId, `MachineCapacity!A${row}:Z${row}`, [rowData]);
+        await updateRange(spreadsheetId, `MachineCapacity!A${row}:AA${row}`, [rowData]);
       } else {
-        await appendRow(spreadsheetId, 'MachineCapacity!A:Z', [rowData]);
+        await appendRow(spreadsheetId, 'MachineCapacity!A:AA', [rowData]);
       }
 
       setIsMachineModalOpen(false);
@@ -278,6 +280,7 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
         message: `Machine "${mForm.machineName}" (${mForm.department}) has been successfully saved to the database.`,
         details: [
           `Rated 16h Capacity: ${Math.round(calc.capacity16Pcs).toLocaleString()} Pcs (${Math.round(calc.capacity16Unit).toLocaleString()} ${mForm.standardUnit})`,
+          `Calculate UEE: ${mForm.calculateUee || 'Yes'} (Visible in UEE & Scrap: ${(mForm.calculateUee || 'Yes') === 'Yes' ? 'Yes' : 'No'})`,
           `Shift Manpower Req: Day: ${mForm.aShiftManpowerRequired || 0}, Night: ${mForm.bShiftManpowerRequired || 0}, Gen: ${mForm.generalShiftManpowerRequired || 0}`,
           `Allocation Strategy: ${mForm.manpowerAllocation}`
         ],
@@ -294,6 +297,7 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
         conversionRatio: '1', aShiftManpowerRequired: '1', bShiftManpowerRequired: '1', generalShiftManpowerRequired: '0',
         manpowerAllocation: 'Both Shift', overtime: 'One Shift',
         capacityExistingManpowerPcs: '', capacityExistingManpowerMachineUnit: '', capacityCount: 'Yes',
+        calculateUee: 'Yes',
         modelNumber: '', serialNumber: '', assetTag: '', onboardDate: '', obsoleteDate: ''
       });
     } catch (err: any) {
@@ -328,6 +332,7 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
       capacityExistingManpowerPcs: m[17] || '',
       capacityExistingManpowerMachineUnit: m[18] || '',
       capacityCount: m[19] || 'Yes',
+      calculateUee: (m[26] || 'Yes').trim().toLowerCase() === 'no' ? 'No' : 'Yes',
       modelNumber: m[21] || '',
       serialNumber: m[22] || '',
       assetTag: m[23] || '',
@@ -335,6 +340,49 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
       obsoleteDate: m[25] || ''
     });
     setIsMachineModalOpen(true);
+  };
+
+  // Quick 1-click toggle for Calculate UEE (Yes / No)
+  const handleToggleCalculateUee = async (index: number, m: string[]) => {
+    try {
+      const currentVal = (m[26] || 'Yes').trim().toLowerCase() === 'no' ? 'No' : 'Yes';
+      const nextVal = currentVal === 'Yes' ? 'No' : 'Yes';
+
+      // Copy existing row and ensure length 27
+      const updatedRow = [...m];
+      while (updatedRow.length < 26) {
+        updatedRow.push('');
+      }
+      updatedRow[26] = nextVal;
+
+      const rowNum = index + 2;
+      await updateRange(spreadsheetId, `MachineCapacity!A${rowNum}:AA${rowNum}`, [updatedRow]);
+
+      // Update local machines state immediately
+      setMachines(prev => {
+        const next = [...prev];
+        next[index] = updatedRow;
+        return next;
+      });
+
+      setModalConfig({
+        isOpen: true,
+        type: 'success',
+        title: `Calculate UEE: ${nextVal}`,
+        message: nextVal === 'Yes' 
+          ? `Machine "${m[4]}" will now be calculated and shown in Machine Plan vs Achievement (UEE & Scrap).`
+          : `Machine "${m[4]}" will now be excluded from Machine Plan vs Achievement (UEE & Scrap).`,
+        onClose: () => setModalConfig(p => ({ ...p, isOpen: false }))
+      });
+    } catch (err: any) {
+      setModalConfig({
+        isOpen: true,
+        type: 'error',
+        title: 'Failed to update Calculate UEE',
+        message: err?.message || 'Could not save setting to database.',
+        onClose: () => setModalConfig(p => ({ ...p, isOpen: false }))
+      });
+    }
   };
 
   const liveCalc = calculateMachineCapacity(
@@ -495,6 +543,7 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
                     conversionRatio: '1', aShiftManpowerRequired: '1', bShiftManpowerRequired: '1', generalShiftManpowerRequired: '0',
                     manpowerAllocation: 'Both Shift', overtime: 'One Shift',
                     capacityExistingManpowerPcs: '', capacityExistingManpowerMachineUnit: '', capacityCount: 'Yes',
+                    calculateUee: 'Yes',
                     modelNumber: '', serialNumber: '', assetTag: '', onboardDate: '', obsoleteDate: ''
                   });
                   setIsMachineModalOpen(true);
@@ -534,7 +583,7 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
 
                 {/* Form Body */}
                 <div className="p-6">
-                  <form onSubmit={handleAddMachine} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
+                  <form onSubmit={handleAddMachine} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
                     
                     {/* Brand */}
                     <div>
@@ -723,6 +772,18 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
                       />
                     </div>
 
+                    {/* Calculate UEE? */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1" title="Include machine in UEE & Scrap floor planning">
+                        Calculate UEE?
+                      </label>
+                      <SearchableSelect
+                        options={['Yes', 'No']}
+                        value={mForm.calculateUee}
+                        onChange={val => setMForm({...mForm, calculateUee: val as 'Yes' | 'No'})}
+                      />
+                    </div>
+
                     {/* Live Calculated Stats */}
                     <div>
                       <label className="block text-xs font-bold text-slate-500 mb-1">Rated 16h Cap (Pcs)</label>
@@ -832,6 +893,7 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
                     <th className="p-3 text-center">Night Req</th>
                     <th className="p-3 text-center">Gen Req</th>
                     <th className="p-3 text-right">16h Cap (Pcs)</th>
+                    <th className="p-3 text-center">Calculate UEE</th>
                     <th className="p-3 text-center">Status</th>
                     <th className="p-3 text-center">Actions</th>
                   </tr>
@@ -840,14 +902,17 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
                   {machines.filter(m => {
                     if (!searchQuery) return true;
                     const q = searchQuery.toLowerCase();
+                    const ueeStatus = (m[26] || 'Yes').toLowerCase();
                     return (m[4] || '').toLowerCase().includes(q) ||
                            (m[0] || '').toLowerCase().includes(q) ||
                            (m[1] || '').toLowerCase().includes(q) ||
                            (m[21] || '').toLowerCase().includes(q) ||
-                           (m[22] || '').toLowerCase().includes(q);
+                           (m[22] || '').toLowerCase().includes(q) ||
+                           (q === 'uee' && ueeStatus === 'yes');
                   }).map((m, originalIndex) => {
                     const i = machines.indexOf(m);
                     const machineStatus = getMachineStatus(m[24], m[25], new Date().toISOString());
+                    const isUeeYes = (m[26] || 'Yes').trim().toLowerCase() !== 'no';
 
                     return (
                       <tr key={i} className="hover:bg-slate-50/80 transition-colors">
@@ -868,6 +933,23 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
 
                         <td className="p-3 text-right font-mono font-black text-indigo-700">
                           {m[10] ? Number(m[10]).toLocaleString() : '-'}
+                        </td>
+
+                        {/* Calculate UEE Toggle Badge */}
+                        <td className="p-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCalculateUee(i, m)}
+                            title={`Click to switch Calculate UEE (Currently: ${isUeeYes ? 'Yes - visible in UEE & Scrap' : 'No - hidden from UEE & Scrap'})`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all shadow-2xs cursor-pointer border ${
+                              isUeeYes 
+                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300' 
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-300'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${isUeeYes ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-slate-400'}`} />
+                            <span>{isUeeYes ? 'Yes' : 'No'}</span>
+                          </button>
                         </td>
 
                         <td className="p-3 text-center">
@@ -893,7 +975,7 @@ export default function MachineCapacity({ spreadsheetId, view, user, userSecurit
 
                   {machines.length === 0 && (
                     <tr>
-                      <td colSpan={13} className="p-12 text-center text-slate-400 font-medium">
+                      <td colSpan={14} className="p-12 text-center text-slate-400 font-medium">
                         No machine records found. Click "Add Machine" or "Bulk Excel" to begin.
                       </td>
                     </tr>

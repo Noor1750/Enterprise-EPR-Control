@@ -675,6 +675,19 @@ export default function Dashboard({
         primaryMetricValue: machineStats.totalDailyCapacity.toLocaleString()
       },
       {
+        id: 'machine-plan',
+        name: 'UEE & Scrap',
+        category: 'Manufacturing',
+        iconName: 'TrendingUp',
+        totalItems: machineStats.total,
+        activeOrPending: machineStats.active,
+        completedOrSettled: machineStats.active,
+        attentionCount: 0,
+        health: 'Good',
+        primaryMetricLabel: 'Daily Target & UEE',
+        primaryMetricValue: 'Active Tracker'
+      },
+      {
         id: 'breakdown',
         name: 'Breakdown Log & Maintenance',
         category: 'Engineering',

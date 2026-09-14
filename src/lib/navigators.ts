@@ -89,6 +89,15 @@ export const DEFAULT_SYSTEM_NAVIGATORS: SystemNavigator[] = [
     status: 'Active'
   },
   {
+    id: 'machine-plan',
+    name: 'UEE & Scrap',
+    moduleName: 'Machine & Skills',
+    description: 'Machine Production Planning, UEE Tracking & Department-Wise Daily Scrap Reports',
+    category: 'Operations',
+    iconName: 'TrendingUp',
+    status: 'Active'
+  },
+  {
     id: 'shifts',
     name: 'Shift Assignments Navigator',
     moduleName: 'Shift Assignments',
